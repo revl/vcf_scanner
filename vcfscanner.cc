@@ -1,8 +1,9 @@
 #include <string>
 #include <iostream>
 #include <cassert>
-#include <string.h>
 #include <stdio.h>
+
+#include "tokenizer.hh"
 
 using namespace std;
 
@@ -10,6 +11,23 @@ class CErrorReport
 {
 public:
     string m_ErrorMessage;
+};
+
+class CVCFScanner;
+
+// CVCFHeader contains information extracted from the VCF header.
+class CVCFHeader
+{
+public:
+    // GetFileFormat returns the file format version.
+    const string& GetFileFormat() const
+    {
+        return m_FileFormat;
+    }
+
+private:
+    string m_FileFormat;
+    friend class CVCFScanner;
 };
 
 // CVCFScanner parses VCF (Variant Call Format) files.
@@ -36,6 +54,8 @@ public:
 class CVCFScanner
 {
 public:
+    CVCFScanner();
+
     // SetNewInputBuffer sets the next buffer to parse. The parser stores
     // the buffer pointer internally. Freeing the buffer will cause a
     // segmentation fault. An buffer of size zero is treated as an EOF
@@ -71,12 +91,19 @@ public:
 
     CErrorReport GetError() const
     {
-        return CErrorReport{"hello"};
+        return m_ErrorReport;
     }
 
     // ParseHeader begins or continues parsing the header.
     // It returns eOK when the entire header has been parsed.
     EParsingEvent ParseHeader();
+
+    // GetHeader returns the VCF header structure parsed by
+    // ParseHeader().
+    const CVCFHeader& GetHeader() const
+    {
+        return m_Header;
+    }
 
     // HasAnotherDataLine returns true if the VCF file has more
     // data lines to parse and false if the entire stream has been
@@ -168,99 +195,152 @@ public:
     // Finishes parsing of the current line. This method must
     // be called repeatedly until it returns eOK thus confirming
     // that the end of the current line has been reached.
-    EParsingEvent ClearLine() {}
-
-    CVCFScanner();
+    EParsingEvent ClearLine();
 
 private:
-    enum ECurrentState { eInitialState } m_CurrentState;
-    EParsingEvent m_ParsingEvent; // Last parsing event
+    enum ECurrentState {
+        eParseVersion,
+        eMetaInfoLineParsing,
+        eHeaderLineParsing,
+        eHeaderError,
+    } m_CurrentState;
+
+    bool x_IsParsingHeader() const
+    {
+        return m_CurrentState <= eHeaderError;
+    }
+
+    bool x_IsAtEOF() const
+    {
+        return m_BufferSize == 0;
+    }
+
+    EParsingEvent x_HeaderError(const char* error_message)
+    {
+        m_ErrorReport.m_ErrorMessage = error_message;
+        m_CurrentState = eHeaderError;
+        return m_LastParsingEvent = eError;
+    }
+
+    EParsingEvent m_LastParsingEvent;
+
     const char* m_Buffer;
     size_t m_BufferSize;
-    unsigned m_LineNumber;
-    string m_Error;
-    bool m_InHeaderReadingMode;
-    bool m_BufferIsNotEmpty;
 
-    // For extracting CHROM, POS, REF, or QUAL fields,
-    // or skipping any other field
-    bool m_NewlineOrTab[256];
-    // For extracting ID, FORMAT, or INFO
-    bool m_NewlineOrTabOrSemicolon[256];
-    // FOR extracting ALT
-    bool m_NewlineOrTabOrComma[256];
-    // For extracting FORMAT or GENOTYPE
-    bool m_NewlineOrTabOrColon[256];
+    unsigned m_LineNumber;
+    CErrorReport m_ErrorReport;
+
+    CVCFTokenizer m_Tokenizer;
+
+    CVCFHeader m_Header;
 };
+
+CVCFScanner::CVCFScanner() :
+    m_CurrentState(eParseVersion),
+    m_LastParsingEvent(eNeedMoreData),
+    m_BufferSize(0),
+    m_LineNumber(0)
+{}
 
 void CVCFScanner::SetNewInputBuffer(const char* buffer, ssize_t buffer_size)
 {
-    assert(m_ParsingEvent == eNeedMoreData);
+    assert(m_LastParsingEvent == eNeedMoreData);
 
-    if (m_BufferIsNotEmpty && buffer_size <= 0) {
-        m_Error = m_InHeaderReadingMode ?
-            "Unexpected EOF while parsing VCF header" :
-            "Unexpected EOF while parsing a data line";
-        m_ParsingEvent = eError;
-    }
+    /* if (!m_SeamBuffer.empty() && buffer_size <= 0) {
+        m_ErrorReport.m_ErrorMessage = x_IsParsingHeader() ?
+                "Unexpected EOF while parsing VCF header" :
+                "Unexpected EOF while parsing a data line";
+        m_LastParsingEvent = eError;
+    } */
 
     m_Buffer = buffer;
     m_BufferSize = buffer_size;
+
+    m_Tokenizer.SetNewBuffer(buffer, buffer_size);
 }
 
-CVCFScanner::EParsingEvent CVCFScanner::NextEvent()
+CVCFScanner::EParsingEvent CVCFScanner::ParseHeader()
 {
-    x_ExtractToken(); // Extract \n (header, skip line) ?+ (\t (all data fields
-                      // ) ?+ ; (id, filter, info) or , (alt) or : (format,
-                      // genotype))
+    assert(x_IsParsingHeader());
+
+    // Extract \n (header, skip line) ?+ (\t (all data fields) ?+ ; (id, filter,
+    // info) or , (alt) or : (format, genotype))
+
+    char meta_info_prefix[2];
+
     switch (m_CurrentState) {
-    case eInitialState:
-        return eNeedMoreData;
+    case eParseVersion:
+        if (x_IsAtEOF())
+            goto UnexpectedEOF;
+
+        if (!m_Tokenizer.PrepareTokenOrAccumulate(m_Tokenizer.FindNewline()))
+            return eNeedMoreData;
+
+        {
+            string key, value;
+
+            if (!m_Tokenizer.GetKeyValue(&key, &value) ||
+                    key != "##fileformat") {
+                return x_HeaderError("VCF file must start with '##fileformat'");
+            }
+
+            m_Header.m_FileFormat = value;
+
+            m_CurrentState = eMetaInfoLineParsing;
+        }
         break;
 
-    default:
+    case eMetaInfoLineParsing:
+        if (x_IsAtEOF())
+            goto UnexpectedEOF;
+
+        for (;;) {
+            if (!m_Tokenizer.Peek(meta_info_prefix, 2))
+                return eNeedMoreData;
+
+            if (meta_info_prefix[0] != '#')
+                goto InvalidMetaInfoLinePrefix;
+
+            if (meta_info_prefix[1] == '#') {
+                if (m_Tokenizer.PrepareTokenOrAccumulate(
+                            m_Tokenizer.FindNewline())) {
+                    cout << m_Tokenizer.GetToken() << endl;
+                }
+
+                return eNeedMoreData;
+            } else if (meta_info_prefix[1] == 'C') {
+                m_CurrentState = eHeaderLineParsing;
+                break;
+            } else
+                goto InvalidMetaInfoLinePrefix;
+        }
+
+    case eHeaderLineParsing:
+
+    // Cannot recover from errors in the header.
+    case eHeaderError:
         break;
     }
-    return eNeedMoreData;
+    return eError;
+
+UnexpectedEOF:
+    return x_HeaderError(
+            "Unexpected end of file while parsing VCF file header");
+
+InvalidMetaInfoLinePrefix:
+    return x_HeaderError("Invalid meta-information line prefix");
 }
 
-CVCFScanner::CVCFScanner() :
-    m_CurrentState(eInitialState),
-    m_ParsingEvent(eNeedMoreData),
-    m_Buffer(nullptr),
-    m_BufferSize(0),
-    m_LineNumber(0)
-{
-    memset(m_NewlineOrTab, 0, sizeof(m_NewlineOrTab));
-    m_NewlineOrTab['\n'] = true;
-    m_NewlineOrTab['\t'] = true;
-
-    memset(m_NewlineOrTabOrSemicolon, 0, sizeof(m_NewlineOrTabOrSemicolon));
-    m_NewlineOrTabOrSemicolon['\n'] = true;
-    m_NewlineOrTabOrSemicolon['\t'] = true;
-    m_NewlineOrTabOrSemicolon[';'] = true;
-
-    memset(m_NewlineOrTabOrComma, 0, sizeof(m_NewlineOrTabOrComma));
-    m_NewlineOrTabOrComma['\n'] = true;
-    m_NewlineOrTabOrComma['\t'] = true;
-    m_NewlineOrTabOrComma[','] = true;
-
-    memset(m_NewlineOrTabOrColon, 0, sizeof(m_NewlineOrTabOrColon));
-    m_NewlineOrTabOrColon['\n'] = true;
-    m_NewlineOrTabOrColon['\t'] = true;
-    m_NewlineOrTabOrColon[':'] = true;
-}
-
-static const char vcf_file[] = R"(`##fileformat=VCFv4.0
+static const char vcf_file[] = R"(##fileformat=VCFv4.0
 ##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
 #CHROM	POS	ID	REF	ALT	QUAL	FORMAT	INFO	FORMAT	S-1	S-2	S-3
 1	100000	.	C	G	.	.	.	GT	0|M	1/.	1/0
-2	200000	.	C	G	.	.	.	GT	0|0	0|1	1|E`)";
+2	200000	.	C	G	.	.	.	GT	0|0	0|1	1|E)";
 
 static const char* vcf_eof_ptr = vcf_file + sizeof(vcf_file) - 1;
 static const char* current_ptr = vcf_file;
 
-static size_t s_ReadVCFFile(void* target_buffer, size_t buffer_size)
+static ssize_t s_ReadVCFFile(void* target_buffer, size_t buffer_size)
 {
     size_t remaining_size = vcf_eof_ptr - current_ptr;
     if (buffer_size > remaining_size)
@@ -287,18 +367,18 @@ int main()
     // Read the header
     do {
         vcf_scanner.SetNewInputBuffer(
-            buffer, s_ReadVCFFile(buffer, sizeof(buffer)));
+                buffer, s_ReadVCFFile(buffer, sizeof(buffer)));
 
-        while ((pe = vcf_scanner.NextEvent()) == CVCFScanner::eWarning)
+        while ((pe = vcf_scanner.ParseHeader()) == CVCFScanner::eWarning)
             cerr << vcf_scanner.GetWarning().m_ErrorMessage << endl;
     } while (pe == CVCFScanner::eNeedMoreData);
 
-    if (pe != CVCFScanner::eHeaderOK) {
+    if (pe != CVCFScanner::eOK) {
         cerr << vcf_scanner.GetError().m_ErrorMessage << endl;
         return 1;
     }
 
-    // Read data lines
+    /* // Read data lines
     for (;;) {
         switch (vcf_scanner.NextEvent()) {
         case CVCFScanner::eNeedMoreData:
@@ -339,7 +419,7 @@ int main()
         }
     }
 
-    pe = vcf_scanner.NextEvent();
+    pe = vcf_scanner.NextEvent(); */
 
     return 0;
 }
