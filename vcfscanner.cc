@@ -1,4 +1,6 @@
 #include <string>
+#include <vector>
+#include <map>
 #include <iostream>
 #include <cassert>
 #include <stdio.h>
@@ -19,14 +21,32 @@ class CVCFScanner;
 class CVCFHeader
 {
 public:
+    typedef vector<string> TMetaInfoLines;
+    typedef map<string, TMetaInfoLines> TMetaInfo;
+    typedef vector<string> TSampleIDs;
+
     // GetFileFormat returns the file format version.
     const string& GetFileFormat() const
     {
         return m_FileFormat;
     }
 
+    const TMetaInfo& GetMetaInfo() const
+    {
+        return m_MetaInfo;
+    }
+
+    const TSampleIDs& GetSampleIDs() const
+    {
+        return m_SampleIDs;
+    }
+
 private:
     string m_FileFormat;
+    TMetaInfo m_MetaInfo;
+    bool m_GenotypeInfoPresent = false;
+    TSampleIDs m_SampleIDs;
+
     friend class CVCFScanner;
 };
 
@@ -44,7 +64,10 @@ private:
 //
 // CVCFScanner does not have a stream reading loop inside. It relies on
 // the client code to provide the input data. As a result, it never blocks
-// on I/O operations.
+// on I/O operations. This allows for using a separate thread to read data
+// into a new buffer while the main thread is parsing a previously read
+// buffer. Alternatively to reading the input file into memory, the whole
+// file can be memory-mapped.
 //
 // Before parsing begins, or when a parsing function returns eNeedMoreData,
 // a new buffer with input data must be supplied to the parser by calling
@@ -54,7 +77,7 @@ private:
 class CVCFScanner
 {
 public:
-    CVCFScanner();
+    CVCFScanner() {}
 
     // SetNewInputBuffer sets the next buffer to parse. The parser stores
     // the buffer pointer internally. Freeing the buffer will cause a
@@ -114,7 +137,7 @@ public:
     // in the input VCF file.
     unsigned GetLineNumber() const
     {
-        return m_LineNumber;
+        return m_Tokenizer.GetLineNumber();
     }
 
     // ParseChrom parses the CHROM field.
@@ -198,36 +221,42 @@ public:
     EParsingEvent ClearLine();
 
 private:
-    enum ECurrentState {
-        eParseVersion,
-        eMetaInfoLineParsing,
-        eHeaderLineParsing,
-        eHeaderError,
-    } m_CurrentState;
+    enum EHeaderParsingState {
+        eFileFormatVersion,
+        eMetaInfoKey,
+        eMetaInfoValue,
+        eHeaderLineColumns,
+        eSampleIDs,
+    } m_HeaderParsingState = eFileFormatVersion;
 
-    bool x_IsParsingHeader() const
-    {
-        return m_CurrentState <= eHeaderError;
-    }
+    /* enum {
+        eChrom,
+        ePos,
+        eID,
+        eRef,
+        eAlt,
+        eQuality,
+        ePassedAllFormats,
+        eFailedFormat,
+        eInfoField,
+        eGenotypeField,
+        eEndOfDataLine,
+        eEndOfStream,
+    } */
 
-    bool x_IsAtEOF() const
-    {
-        return m_BufferSize == 0;
-    }
+    string m_CurrentMetaInfoKey;
+
+    unsigned m_HeaderLineColumnOK;
 
     EParsingEvent x_HeaderError(const char* error_message)
     {
         m_ErrorReport.m_ErrorMessage = error_message;
-        m_CurrentState = eHeaderError;
-        return m_LastParsingEvent = eError;
+        return eError;
     }
 
-    EParsingEvent m_LastParsingEvent;
-
     const char* m_Buffer;
-    size_t m_BufferSize;
+    size_t m_BufferSize = 0;
 
-    unsigned m_LineNumber;
     CErrorReport m_ErrorReport;
 
     CVCFTokenizer m_Tokenizer;
@@ -235,44 +264,24 @@ private:
     CVCFHeader m_Header;
 };
 
-CVCFScanner::CVCFScanner() :
-    m_CurrentState(eParseVersion),
-    m_LastParsingEvent(eNeedMoreData),
-    m_BufferSize(0),
-    m_LineNumber(0)
-{}
-
 void CVCFScanner::SetNewInputBuffer(const char* buffer, ssize_t buffer_size)
 {
-    assert(m_LastParsingEvent == eNeedMoreData);
-
-    /* if (!m_SeamBuffer.empty() && buffer_size <= 0) {
-        m_ErrorReport.m_ErrorMessage = x_IsParsingHeader() ?
-                "Unexpected EOF while parsing VCF header" :
-                "Unexpected EOF while parsing a data line";
-        m_LastParsingEvent = eError;
-    } */
-
     m_Buffer = buffer;
     m_BufferSize = buffer_size;
 
     m_Tokenizer.SetNewBuffer(buffer, buffer_size);
 }
 
+static constexpr unsigned kNumberOfMandatoryColumns = 8;
+
+static const char* s_HeaderLineColumns[kNumberOfMandatoryColumns + 1] = {
+        "#CHROM", "POS", "ID", "REF", "ALT", "QUAL", "FILTER", "INFO",
+        "FORMAT"};
+
 CVCFScanner::EParsingEvent CVCFScanner::ParseHeader()
 {
-    assert(x_IsParsingHeader());
-
-    // Extract \n (header, skip line) ?+ (\t (all data fields) ?+ ; (id, filter,
-    // info) or , (alt) or : (format, genotype))
-
-    char meta_info_prefix[2];
-
-    switch (m_CurrentState) {
-    case eParseVersion:
-        if (x_IsAtEOF())
-            goto UnexpectedEOF;
-
+    switch (m_HeaderParsingState) {
+    case eFileFormatVersion:
         if (!m_Tokenizer.PrepareTokenOrAccumulate(m_Tokenizer.FindNewline()))
             return eNeedMoreData;
 
@@ -285,57 +294,120 @@ CVCFScanner::EParsingEvent CVCFScanner::ParseHeader()
             }
 
             m_Header.m_FileFormat = value;
-
-            m_CurrentState = eMetaInfoLineParsing;
         }
-        break;
 
-    case eMetaInfoLineParsing:
-        if (x_IsAtEOF())
+    ParseMetaInfoKey:
+        m_HeaderParsingState = eMetaInfoKey;
+        /* FALL THROUGH */
+
+    case eMetaInfoKey:
+        if (!m_Tokenizer.PrepareTokenOrAccumulate(
+                    m_Tokenizer.FindNewlineOrTabOrEquals()))
+            return eNeedMoreData;
+
+        switch (m_Tokenizer.GetTokenTerm()) {
+        case '\t':
+            if (m_Tokenizer.GetToken() != s_HeaderLineColumns[0])
+                goto InvalidMetaInfoLine;
+            m_HeaderLineColumnOK = 1;
+            goto ParseHeaderColumns;
+        case '\n':
+            goto InvalidMetaInfoLine;
+        case EOF:
+            goto UnexpectedEOF;
+        }
+
+        m_CurrentMetaInfoKey = m_Tokenizer.GetToken();
+
+        m_HeaderParsingState = eMetaInfoValue;
+        /* FALL THROUGH */
+
+    case eMetaInfoValue:
+        if (!m_Tokenizer.PrepareTokenOrAccumulate(m_Tokenizer.FindNewline()))
+            return eNeedMoreData;
+
+        if (m_Tokenizer.GetTokenTerm() == EOF)
             goto UnexpectedEOF;
 
-        for (;;) {
-            if (!m_Tokenizer.Peek(meta_info_prefix, 2))
+        m_Header.m_MetaInfo[m_CurrentMetaInfoKey].push_back(
+                m_Tokenizer.GetToken());
+
+        goto ParseMetaInfoKey;
+
+    ParseHeaderColumns:
+        m_HeaderParsingState = eHeaderLineColumns;
+        /* FALL THROUGH */
+
+    case eHeaderLineColumns:
+        do {
+            if (!m_Tokenizer.PrepareTokenOrAccumulate(
+                        m_Tokenizer.FindNewlineOrTab()))
                 return eNeedMoreData;
 
-            if (meta_info_prefix[0] != '#')
-                goto InvalidMetaInfoLinePrefix;
+            if (m_Tokenizer.GetToken() !=
+                    s_HeaderLineColumns[m_HeaderLineColumnOK])
+                goto InvalidHeaderLine;
 
-            if (meta_info_prefix[1] == '#') {
-                if (m_Tokenizer.PrepareTokenOrAccumulate(
-                            m_Tokenizer.FindNewline())) {
-                    cout << m_Tokenizer.GetToken() << endl;
+            ++m_HeaderLineColumnOK;
+
+            switch (m_Tokenizer.GetTokenTerm()) {
+            case '\n':
+            case EOF:
+                switch (m_HeaderLineColumnOK) {
+                case kNumberOfMandatoryColumns + 1:
+                    m_Header.m_GenotypeInfoPresent = true;
+                    /* FALL THROUGH */
+                case kNumberOfMandatoryColumns:
+                    return eOK;
+                default:
+                    goto InvalidHeaderLine;
                 }
+            }
 
+            // The current token ends with a tab.
+        } while (m_HeaderLineColumnOK <= kNumberOfMandatoryColumns);
+
+        m_Header.m_GenotypeInfoPresent = true;
+        m_HeaderParsingState = eSampleIDs;
+        /* FALL THROUGH */
+
+    case eSampleIDs:
+        for (;;) {
+            if (!m_Tokenizer.PrepareTokenOrAccumulate(
+                        m_Tokenizer.FindNewlineOrTab()))
                 return eNeedMoreData;
-            } else if (meta_info_prefix[1] == 'C') {
-                m_CurrentState = eHeaderLineParsing;
-                break;
-            } else
-                goto InvalidMetaInfoLinePrefix;
+
+            m_Header.m_SampleIDs.push_back(m_Tokenizer.GetToken());
+
+            switch (m_Tokenizer.GetTokenTerm()) {
+            case '\n':
+            case EOF:
+                return eOK;
+            }
         }
-
-    case eHeaderLineParsing:
-
-    // Cannot recover from errors in the header.
-    case eHeaderError:
-        break;
     }
-    return eError;
 
 UnexpectedEOF:
     return x_HeaderError(
             "Unexpected end of file while parsing VCF file header");
 
-InvalidMetaInfoLinePrefix:
-    return x_HeaderError("Invalid meta-information line prefix");
+InvalidMetaInfoLine:
+    return x_HeaderError("Malformed meta-information line");
+
+InvalidHeaderLine:
+    return x_HeaderError("Malformed VCF header line");
 }
 
-static const char vcf_file[] = R"(##fileformat=VCFv4.0
-##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
-#CHROM	POS	ID	REF	ALT	QUAL	FORMAT	INFO	FORMAT	S-1	S-2	S-3
-1	100000	.	C	G	.	.	.	GT	0|M	1/.	1/0
-2	200000	.	C	G	.	.	.	GT	0|0	0|1	1|E)";
+static const char vcf_file[] =
+        "##fileformat=VCFv4.0\n"
+        "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">\r\n"
+        "#CHROM	POS	ID	REF	ALT	QUAL	FILTER	"
+        "INFO	"
+        "FORMAT	S-1	S-2	S-3\n"
+        "1	100000	.	C	G	.	.	.	"
+        "GT	0|M	1/.	1/0\n"
+        "2	200000	.	C	G	.	.	.	"
+        "GT	0|0	0|1	1|E";
 
 static const char* vcf_eof_ptr = vcf_file + sizeof(vcf_file) - 1;
 static const char* current_ptr = vcf_file;
@@ -350,11 +422,13 @@ static ssize_t s_ReadVCFFile(void* target_buffer, size_t buffer_size)
     return buffer_size;
 }
 
-#define ERR(what)                                                              \
-    {                                                                          \
-        cerr << what << endl;                                                  \
-        return 1;                                                              \
-    }
+#define RETRY_UNTIL_OK_OR_ERROR(vcf_scanner_call)                              \
+    do {                                                                       \
+        vcf_scanner.SetNewInputBuffer(                                         \
+                buffer, s_ReadVCFFile(buffer, sizeof(buffer)));                \
+        while ((pe = vcf_scanner_call) == CVCFScanner::eWarning)               \
+            cerr << vcf_scanner.GetWarning().m_ErrorMessage << endl;           \
+    } while (pe == CVCFScanner::eNeedMoreData)
 
 int main()
 {
@@ -365,17 +439,23 @@ int main()
     CVCFScanner::EParsingEvent pe;
 
     // Read the header
-    do {
-        vcf_scanner.SetNewInputBuffer(
-                buffer, s_ReadVCFFile(buffer, sizeof(buffer)));
-
-        while ((pe = vcf_scanner.ParseHeader()) == CVCFScanner::eWarning)
-            cerr << vcf_scanner.GetWarning().m_ErrorMessage << endl;
-    } while (pe == CVCFScanner::eNeedMoreData);
+    RETRY_UNTIL_OK_OR_ERROR(vcf_scanner.ParseHeader());
 
     if (pe != CVCFScanner::eOK) {
         cerr << vcf_scanner.GetError().m_ErrorMessage << endl;
         return 1;
+    }
+
+    for (const auto& kv : vcf_scanner.GetHeader().GetMetaInfo()) {
+        cout << '[' << kv.first << ']' << endl;
+        for (const auto& v : kv.second) {
+            cout << v << endl;
+        }
+    }
+
+    cout << "[Sample IDs]" << endl;
+    for (const auto& v : vcf_scanner.GetHeader().GetSampleIDs()) {
+        cout << v << endl;
     }
 
     /* // Read data lines

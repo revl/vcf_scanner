@@ -1,0 +1,5 @@
+* Test parser with CRLF newlines. Make sure CR does not get into tokens
+  when buffer_size=1 and buffer_size=whole_file
+* Test checking for EOF in random places.
+* Run every test with every possible buffer_size
+* Make sure it works when no meta information lines are defined.
