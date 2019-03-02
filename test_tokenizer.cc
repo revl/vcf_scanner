@@ -37,12 +37,11 @@ int main()
             puts("WTF");
     }
 
-    printf(
-        "Number of newlines: %lu\n"
-        "Number of tabs: %lu\n"
-        "Number of commas: %lu\n",
-        (long unsigned) number_of_newlines, (long unsigned) number_of_tabs,
-        (long unsigned) number_of_commas);
+    printf("Number of newlines: %lu\n"
+           "Number of tabs: %lu\n"
+           "Number of commas: %lu\n",
+            (long unsigned) number_of_newlines, (long unsigned) number_of_tabs,
+            (long unsigned) number_of_commas);
 
     return 0;
 }

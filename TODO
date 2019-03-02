@@ -3,3 +3,9 @@
 * Test checking for EOF in random places.
 * Run every test with every possible buffer_size
 * Make sure it works when no meta information lines are defined.
+* Test that files without a newlines at the end of the last line parse OK.
+* Parse integer tokens in the tokenizer.
+* Define tokenizer.AtEOLOrEOF
+* Fix return x_MissingFieldError(s_HeaderLineColumns[m_DataLineParsingState]);
+  -- it will return #CHROM
+

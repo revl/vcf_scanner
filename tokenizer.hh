@@ -15,6 +15,16 @@ public:
         m_CurrentPtr = (m_RemainingSize = buffer_size) > 0 ? buffer : nullptr;
     }
 
+    bool BufferIsEmpty() const
+    {
+        return m_RemainingSize == 0;
+    }
+
+    bool AtEOF() const
+    {
+        return m_CurrentPtr == nullptr;
+    }
+
     const char* FindNewline()
     {
         return (const char*) memchr(m_CurrentPtr, '\n', m_RemainingSize);
@@ -32,6 +42,11 @@ private:
     }
 
 public:
+    const char* FindCharFromSet(const bool* character_set)
+    {
+        return x_FindCharFromSet(m_CurrentPtr, m_RemainingSize, character_set);
+    }
+
     const char* FindNewlineOrTab()
     {
         return x_FindCharFromSet(m_CurrentPtr, m_RemainingSize, m_NewlineOrTab);
@@ -69,65 +84,6 @@ private:
         m_TokenTerm = token_term;
     }
 
-    void x_SaveRemainingBytes()
-    {
-        if (m_Accumulating)
-            m_Accumulator.append(m_CurrentPtr, m_RemainingSize);
-        else {
-            m_Accumulating = true;
-            m_Accumulator.assign(m_CurrentPtr, m_RemainingSize);
-        }
-    }
-
-public:
-    /* bool Peek(int* next_char)
-    {
-        x_SetTokenTermAndPossiblyIncrementLineNumber('\0');
-
-        if (m_Accumulating && !m_Accumulator.empty()) {
-            *next_char = m_Accumulator.front();
-            return true;
-        }
-        if (m_RemainingSize >= 1) {
-            *next_char = *m_CurrentPtr;
-            x_SaveRemainingBytes();
-            return true;
-        }
-        if (m_CurrentPtr == nullptr) {
-            *next_char = EOF;
-            return true;
-        }
-
-        return false;
-    }
-
-    bool Peek(char* buffer, size_t how_many_bytes)
-    {
-        x_SetTokenTermAndPossiblyIncrementLineNumber('\0');
-
-        if (m_Accumulating) {
-            const size_t acc_len = m_Accumulator.length();
-            if (acc_len >= how_many_bytes) {
-                memcpy(buffer, m_Accumulator.data(), how_many_bytes);
-                return true;
-            }
-
-            how_many_bytes -= acc_len;
-            if (m_RemainingSize >= how_many_bytes) {
-                memcpy(buffer, m_Accumulator.data(), acc_len);
-                memcpy(buffer + acc_len, m_CurrentPtr, how_many_bytes);
-                return true;
-            }
-        } else if (m_RemainingSize >= how_many_bytes) {
-            memcpy(buffer, m_CurrentPtr, how_many_bytes);
-            return true;
-        }
-
-        x_SaveRemainingBytes();
-        return false;
-    } */
-
-private:
     void x_AdvanceBy(size_t number_of_bytes)
     {
         m_CurrentPtr += number_of_bytes;
@@ -140,7 +96,14 @@ public:
         if (end_of_token == nullptr) {
             if (m_CurrentPtr != nullptr) {
                 x_SetTokenTermAndPossiblyIncrementLineNumber('\0');
-                x_SaveRemainingBytes();
+
+                if (m_Accumulating)
+                    m_Accumulator.append(m_CurrentPtr, m_RemainingSize);
+                else {
+                    m_Accumulating = true;
+                    m_Accumulator.assign(m_CurrentPtr, m_RemainingSize);
+                }
+
                 return false;
             }
 
@@ -157,19 +120,20 @@ public:
             return true;
         }
 
-        x_SetTokenTermAndPossiblyIncrementLineNumber(*end_of_token);
+        x_SetTokenTermAndPossiblyIncrementLineNumber(
+                (unsigned char) *end_of_token);
 
         const size_t token_len = end_of_token - m_CurrentPtr;
 
-        if (!m_Accumulating) {
-            if (token_len > 0) {
+        if (!m_Accumulating)
+            if (token_len > 0)
                 m_Token.assign(m_CurrentPtr,
                         *end_of_token == '\n' && end_of_token[-1] == '\r' ?
                                 token_len - 1 :
                                 token_len);
-            } else
+            else
                 m_Token.clear();
-        } else {
+        else {
             m_Accumulating = false;
             if (token_len > 0) {
                 m_Accumulator.append(m_CurrentPtr,
@@ -202,7 +166,8 @@ public:
             return true;
         }
 
-        x_SetTokenTermAndPossiblyIncrementLineNumber(*end_of_token);
+        x_SetTokenTermAndPossiblyIncrementLineNumber(
+                (unsigned char) *end_of_token);
 
         x_AdvanceBy(end_of_token + 1 - m_CurrentPtr);
 
@@ -297,6 +262,7 @@ private:
 
     string m_Token;
 
+public:
     // For parsing the meta-information lines
     // as well as the first token of the header line
     bool m_NewlineOrTabOrEquals[256];
