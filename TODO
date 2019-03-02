@@ -8,4 +8,4 @@
 * Define tokenizer.AtEOLOrEOF
 * Fix return x_MissingFieldError(s_HeaderLineColumns[m_DataLineParsingState]);
   -- it will return #CHROM
-
+* Check that field skipping works properly

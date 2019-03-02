@@ -214,6 +214,16 @@ public:
         return m_Token;
     }
 
+    bool TokenIsDot() const
+    {
+        return m_Token.empty() || m_Token == ".";
+    }
+
+    bool TokenIsLast() const
+    {
+        return m_TokenTerm == '\n' || m_TokenTerm == EOF;
+    }
+
     bool GetKeyValue(string* key, string* value, char delim = '=')
     {
         size_t delim_pos = m_Token.find(delim);
