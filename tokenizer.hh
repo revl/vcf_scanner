@@ -1,6 +1,7 @@
 #include <string>
 #include <string.h>
 #include <iostream>
+#include <limits.h>
 
 // For the EOF definition
 #include <stdio.h>
@@ -91,10 +92,44 @@ private:
     }
 
 public:
+    enum EIntParsingResult { eEndOfNumber, eIntegerOverflow, eEndOfBuffer };
+
+    EIntParsingResult ParseUnsignedInt(unsigned* number, unsigned* number_len)
+    {
+        if (m_RemainingSize == 0) {
+            if (AtEOF()) {
+                x_SetTokenTermAndPossiblyIncrementLineNumber(EOF);
+                return eEndOfNumber;
+            }
+            return eEndOfBuffer;
+        }
+
+        unsigned digit;
+
+        do {
+            if ((digit = (unsigned) *m_CurrentPtr - '0') > 9) {
+                x_SetTokenTermAndPossiblyIncrementLineNumber(
+                        (unsigned char) *m_CurrentPtr);
+                return eEndOfNumber;
+            }
+
+            if (*number > (UINT_MAX / 10) ||
+                    (*number == (UINT_MAX / 10) && digit > UINT_MAX % 10))
+                return eIntegerOverflow;
+
+            *number = *number * 10 + digit;
+            ++*number_len;
+
+            ++m_CurrentPtr;
+        } while (--m_RemainingSize > 0);
+
+        return eEndOfBuffer;
+    }
+
     bool PrepareTokenOrAccumulate(const char* const end_of_token)
     {
         if (end_of_token == nullptr) {
-            if (m_CurrentPtr != nullptr) {
+            if (!AtEOF()) {
                 x_SetTokenTermAndPossiblyIncrementLineNumber('\0');
 
                 if (m_Accumulating)
@@ -157,7 +192,7 @@ public:
         m_Accumulating = false;
 
         if (end_of_token == nullptr) {
-            if (m_CurrentPtr != nullptr) {
+            if (!AtEOF()) {
                 x_SetTokenTermAndPossiblyIncrementLineNumber('\0');
                 return false;
             }

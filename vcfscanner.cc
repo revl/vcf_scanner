@@ -151,18 +151,15 @@ public:
         return m_Tokenizer.AtEOF();
     }
 
-    // ParseChrom parses the CHROM field.
-    EParsingEvent ParseChrom();
-    // GetChrom returns the CHROM field parsed by ParseChrom.
+    // ParseLoc parses CHROM and POS fields.
+    EParsingEvent ParseLoc();
+    // GetChrom returns the CHROM field parsed by ParseLoc.
     const string& GetChrom() const
     {
-        return m_Tokenizer.GetToken();
+        return m_Chrom;
     }
-
-    // ParsePos parses the POS field.
-    EParsingEvent ParsePos();
-    // GetPos returns the POS field parsed by ParsePos.
-    int GetPos() const
+    // GetPos returns the POS field parsed by ParseLoc.
+    unsigned GetPos() const
     {
         return m_Pos;
     }
@@ -319,14 +316,20 @@ private:
         return eError;
     }
 
-    EParsingEvent x_MissingFieldError(const char* field_name)
+    EParsingEvent x_DataLineError(const string& msg)
     {
+        m_ErrorReport.m_ErrorMessage = msg;
+        return eError;
+    }
+
+    EParsingEvent x_UnexpectedEOLError(const char* field_name)
+    {
+        m_DataLineParsingState = eEndOfDataLine;
+
         string msg = "Missing VCF field \"";
         msg += field_name;
         msg += '"';
-        m_ErrorReport.m_ErrorMessage = msg;
-        m_DataLineParsingState = eEndOfDataLine;
-        return eError;
+        return x_DataLineError(msg);
     }
 
     EParsingEvent x_ParseStringToken(int target_state);
@@ -341,7 +344,10 @@ private:
 
     CVCFHeader m_Header;
 
-    int m_Pos;
+    unsigned m_NumberLen;
+
+    string m_Chrom;
+    unsigned m_Pos;
 };
 
 void CVCFScanner::SetNewInputBuffer(const char* buffer, ssize_t buffer_size)
@@ -491,24 +497,6 @@ CVCFScanner::EParsingEvent CVCFScanner::Rewind()
     return eOK;
 }
 
-CVCFScanner::EParsingEvent CVCFScanner::ParseChrom()
-{
-    assert(m_DataLineParsingState == eChrom &&
-            "Must Rewind() before ParseChrom()");
-
-    if (!m_Tokenizer.PrepareTokenOrAccumulate(m_Tokenizer.FindNewlineOrTab()))
-        return eNeedMoreData;
-
-    switch (m_Tokenizer.GetTokenTerm()) {
-    case EOF:
-    case '\n':
-        return x_MissingFieldError("CHROM");
-    }
-
-    ++m_DataLineParsingState;
-    return eOK;
-}
-
 #define FAST_FORWARD_TO_STATE(new_state)                                       \
     for (; m_DataLineParsingState < new_state; ++m_DataLineParsingState) {     \
         if (!m_Tokenizer.SkipToken(m_Tokenizer.FindNewlineOrTab()))            \
@@ -516,29 +504,55 @@ CVCFScanner::EParsingEvent CVCFScanner::ParseChrom()
         switch (m_Tokenizer.GetTokenTerm()) {                                  \
         case EOF:                                                              \
         case '\n':                                                             \
-            return x_MissingFieldError(m_HeaderLineColumns[new_state]);        \
+            return x_UnexpectedEOLError(m_HeaderLineColumns[new_state]);       \
         }                                                                      \
     }
 
-CVCFScanner::EParsingEvent CVCFScanner::ParsePos()
+CVCFScanner::EParsingEvent CVCFScanner::ParseLoc()
 {
-    assert(m_DataLineParsingState <= ePos && "Must Rewind() before ParsePos()");
+    assert(m_DataLineParsingState <= ePos && "Must Rewind() before ParseLoc()");
 
-    FAST_FORWARD_TO_STATE(ePos);
+    switch (m_DataLineParsingState) {
+    case eChrom:
+        if (!m_Tokenizer.PrepareTokenOrAccumulate(
+                    m_Tokenizer.FindNewlineOrTab()))
+            return eNeedMoreData;
 
-    if (!m_Tokenizer.PrepareTokenOrAccumulate(m_Tokenizer.FindNewlineOrTab()))
-        return eNeedMoreData;
+        switch (m_Tokenizer.GetTokenTerm()) {
+        case EOF:
+        case '\n':
+            return x_UnexpectedEOLError("CHROM");
+        }
 
-    switch (m_Tokenizer.GetTokenTerm()) {
-    case EOF:
-    case '\n':
-        return x_MissingFieldError("POS");
+        m_Chrom = m_Tokenizer.GetToken();
+
+        m_DataLineParsingState = ePos;
+        m_Pos = 0;
+        m_NumberLen = 0;
+        /* FALL THROUGH */
+
+    case ePos:
+        switch (m_Tokenizer.ParseUnsignedInt(&m_Pos, &m_NumberLen)) {
+        case CVCFTokenizer::eEndOfBuffer:
+            return eNeedMoreData;
+        case CVCFTokenizer::eIntegerOverflow:
+            return x_DataLineError("Integer overflow in the POS column");
+        default: // CVCFTokenizer::eEndOfNumber
+            break;
+        }
+
+        if (m_NumberLen == 0)
+            return x_DataLineError("Missing an integer in the POS column");
+
+        if (m_Tokenizer.GetTokenTerm() != '\t')
+            return x_DataLineError("Invalid data line format");
+
+        m_DataLineParsingState = eID;
+        return eOK;
+
+    default:
+        return eError;
     }
-
-    m_Pos = atoi(m_Tokenizer.GetToken().c_str());
-
-    ++m_DataLineParsingState;
-    return eOK;
 }
 
 CVCFScanner::EParsingEvent CVCFScanner::x_ParseListToken(
@@ -556,7 +570,7 @@ CVCFScanner::EParsingEvent CVCFScanner::x_ParseListToken(
     switch (m_Tokenizer.GetTokenTerm()) {
     case EOF:
     case '\n':
-        return x_MissingFieldError(m_HeaderLineColumns[target_state]);
+        return x_UnexpectedEOLError(m_HeaderLineColumns[target_state]);
     case '\t':
         ++m_DataLineParsingState;
     }
@@ -582,7 +596,7 @@ CVCFScanner::EParsingEvent CVCFScanner::x_ParseStringToken(int target_state)
     switch (m_Tokenizer.GetTokenTerm()) {
     case EOF:
     case '\n':
-        return x_MissingFieldError(m_HeaderLineColumns[target_state]);
+        return x_UnexpectedEOLError(m_HeaderLineColumns[target_state]);
     }
 
     ++m_DataLineParsingState;
@@ -732,16 +746,14 @@ int main()
         if (vcf_scanner.AtEOF())
             break;
 
-        RETRY_UNTIL_OK_AND_SKIP_LINE_ON_ERROR(vcf_scanner.ParseChrom());
-        cout << vcf_scanner.GetLineNumber() << ":CHROM:["
-             << vcf_scanner.GetChrom() << ']' << endl;
+        cout << '#' << vcf_scanner.GetLineNumber() << endl;
 
-        RETRY_UNTIL_OK_AND_SKIP_LINE_ON_ERROR(vcf_scanner.ParsePos());
-        cout << vcf_scanner.GetLineNumber() << ":POS:[" << vcf_scanner.GetPos()
-             << ']' << endl;
+        RETRY_UNTIL_OK_AND_SKIP_LINE_ON_ERROR(vcf_scanner.ParseLoc());
+        cout << "CHROM:[" << vcf_scanner.GetChrom() << ']' << endl;
+        cout << "POS:[" << vcf_scanner.GetPos() << ']' << endl;
 
         RETRY_UNTIL_OK_AND_SKIP_LINE_ON_ERROR(vcf_scanner.ParseID());
-        cout << vcf_scanner.GetLineNumber() << ":ID:[" << vcf_scanner.GetID();
+        cout << "ID:[" << vcf_scanner.GetID();
         while (vcf_scanner.HasAnotherID()) {
             RETRY_UNTIL_OK_AND_SKIP_LINE_ON_ERROR(vcf_scanner.ParseID());
             cout << " and " << vcf_scanner.GetID();
@@ -749,11 +761,10 @@ int main()
         cout << ']' << endl;
 
         RETRY_UNTIL_OK_AND_SKIP_LINE_ON_ERROR(vcf_scanner.ParseRef());
-        cout << vcf_scanner.GetLineNumber() << ":REF:[" << vcf_scanner.GetRef()
-             << ']' << endl;
+        cout << "REF:[" << vcf_scanner.GetRef() << ']' << endl;
 
         RETRY_UNTIL_OK_AND_SKIP_LINE_ON_ERROR(vcf_scanner.ParseAlt());
-        cout << vcf_scanner.GetLineNumber() << ":ALT:[" << vcf_scanner.GetAlt();
+        cout << "ALT:[" << vcf_scanner.GetAlt();
         while (vcf_scanner.HasAnotherAlt()) {
             RETRY_UNTIL_OK_AND_SKIP_LINE_ON_ERROR(vcf_scanner.ParseAlt());
             cout << " and " << vcf_scanner.GetAlt();
@@ -761,11 +772,11 @@ int main()
         cout << ']' << endl;
 
         /* RETRY_UNTIL_OK_AND_SKIP_LINE_ON_ERROR(vcf_scanner.ParseQuality());
-        cout << vcf_scanner.GetLineNumber() << ":QUAL:["
+        cout << "QUAL:["
              << vcf_scanner.GetQuality() << ']' << endl;
 
         RETRY_UNTIL_OK_AND_SKIP_LINE_ON_ERROR(vcf_scanner.ParseFilter());
-        cout << vcf_scanner.GetLineNumber() << ":FILTER:["
+        cout << "FILTER:["
              << vcf_scanner.GetFilter();
         while (vcf_scanner.HasAnotherFilter()) {
             RETRY_UNTIL_OK_AND_SKIP_LINE_ON_ERROR(vcf_scanner.ParseFilter());
@@ -774,7 +785,7 @@ int main()
         cout << ']' << endl;
 
         RETRY_UNTIL_OK_AND_SKIP_LINE_ON_ERROR(vcf_scanner.ParseInfo());
-        cout << vcf_scanner.GetLineNumber() << ":INFO:["
+        cout << "INFO:["
              << vcf_scanner.GetInfo();
         while (vcf_scanner.HasMoreInfo()) {
             RETRY_UNTIL_OK_AND_SKIP_LINE_ON_ERROR(vcf_scanner.ParseInfo());
@@ -784,7 +795,7 @@ int main()
 
         RETRY_UNTIL_OK_AND_SKIP_LINE_ON_ERROR(
                 vcf_scanner.ParseGenotypeFormat());
-        cout << vcf_scanner.GetLineNumber() << ":FORMAT:["
+        cout << "FORMAT:["
              << vcf_scanner.GetGenotypeFormat();
         while (vcf_scanner.HasAnotherGenotypeFormat()) {
             RETRY_UNTIL_OK_AND_SKIP_LINE_ON_ERROR(
@@ -794,8 +805,7 @@ int main()
         cout << ']' << endl; */
 
         RETRY_UNTIL_OK_AND_SKIP_LINE_ON_ERROR(vcf_scanner.ParseGenotype());
-        cout << vcf_scanner.GetLineNumber() << ":GENOTYPE:["
-             << vcf_scanner.GetGenotype();
+        cout << "GENOTYPE:[" << vcf_scanner.GetGenotype();
         while (vcf_scanner.HasAnotherGenotype()) {
             RETRY_UNTIL_OK_AND_SKIP_LINE_ON_ERROR(vcf_scanner.ParseGenotype());
             cout << " and " << vcf_scanner.GetGenotype();
