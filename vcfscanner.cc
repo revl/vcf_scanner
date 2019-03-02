@@ -520,18 +520,13 @@ CVCFScanner::EParsingEvent CVCFScanner::ParseLoc()
     } while (m_Tokenizer.GetTokenTerm() != '\t');
 
 #define REALLY_DO_SKIP_TO_FIELD(field)                                         \
-    if (m_DataLineParsingState < field) {                                      \
-        do {                                                                   \
-            if (!m_Tokenizer.SkipToken(m_Tokenizer.FindNewlineOrTab()))        \
-                return eNeedMoreData;                                          \
-            if (m_Tokenizer.TokenIsLast())                                     \
-                return x_MissingMandatoryFieldError(                           \
-                        m_HeaderLineColumns[m_DataLineParsingState + 1]);      \
-        } while (++m_DataLineParsingState < field);                            \
-    } else {                                                                   \
-        assert(false && "Must call Rewind() first");                           \
-        return eError;                                                         \
-    }
+    do {                                                                       \
+        if (!m_Tokenizer.SkipToken(m_Tokenizer.FindNewlineOrTab()))            \
+            return eNeedMoreData;                                              \
+        if (m_Tokenizer.TokenIsLast())                                         \
+            return x_MissingMandatoryFieldError(                               \
+                    m_HeaderLineColumns[m_DataLineParsingState + 1]);          \
+    } while (++m_DataLineParsingState < field)
 
 CVCFScanner::EParsingEvent CVCFScanner::ParseIDs()
 {
@@ -621,7 +616,12 @@ CVCFScanner::EParsingEvent CVCFScanner::ParseFilters()
 
 CVCFScanner::EParsingEvent CVCFScanner::ParseInfo()
 {
-    if (m_DataLineParsingState != eInfoField) {
+    if (m_DataLineParsingState > eInfoField) {
+        assert(false && "Must call Rewind() before ParseInfo()");
+        return eError;
+    }
+
+    if (m_DataLineParsingState < eInfoField) {
         REALLY_DO_SKIP_TO_FIELD(eInfoField);
         m_Info.clear();
     }
@@ -647,7 +647,12 @@ CVCFScanner::EParsingEvent CVCFScanner::ParseInfo()
 
 CVCFScanner::EParsingEvent CVCFScanner::ParseGenotypeFormats()
 {
-    if (m_DataLineParsingState != eGenotypeFormat) {
+    if (m_DataLineParsingState > eGenotypeFormat) {
+        assert(false && "Must call Rewind() before ParseGenotypeFormats()");
+        return eError;
+    }
+
+    if (m_DataLineParsingState < eGenotypeFormat) {
         REALLY_DO_SKIP_TO_FIELD(eGenotypeFormat);
         m_GenotypeFormats.clear();
     }
@@ -806,38 +811,23 @@ int main()
         for (const auto& alt : vcf_scanner.GetAlts())
             cout << "ALT:[" << alt << ']' << endl;
 
-        /* RETRY_UNTIL_OK_AND_SKIP_LINE_ON_ERROR(vcf_scanner.ParseQuality());
-        cout << "QUAL:["
-             << vcf_scanner.GetQuality() << ']' << endl;
+        RETRY_UNTIL_OK_AND_SKIP_LINE_ON_ERROR(vcf_scanner.ParseQuality());
+        string quality = vcf_scanner.GetQuality();
+        if (!quality.empty())
+            cout << "QUAL:[" << quality << ']' << endl;
 
-        RETRY_UNTIL_OK_AND_SKIP_LINE_ON_ERROR(vcf_scanner.ParseFilter());
-        cout << "FILTER:["
-             << vcf_scanner.GetFilter();
-        while (vcf_scanner.HasAnotherFilter()) {
-            RETRY_UNTIL_OK_AND_SKIP_LINE_ON_ERROR(vcf_scanner.ParseFilter());
-            cout << " and " << vcf_scanner.GetFilter();
-        }
-        cout << ']' << endl;
+        RETRY_UNTIL_OK_AND_SKIP_LINE_ON_ERROR(vcf_scanner.ParseFilters());
+        for (const auto& filter : vcf_scanner.GetFilters())
+            cout << "FILTER:[" << filter << ']' << endl;
 
         RETRY_UNTIL_OK_AND_SKIP_LINE_ON_ERROR(vcf_scanner.ParseInfo());
-        cout << "INFO:["
-             << vcf_scanner.GetInfo();
-        while (vcf_scanner.HasMoreInfo()) {
-            RETRY_UNTIL_OK_AND_SKIP_LINE_ON_ERROR(vcf_scanner.ParseInfo());
-            cout << " and " << vcf_scanner.GetInfo();
-        }
-        cout << ']' << endl;
+        for (const auto& info_item : vcf_scanner.GetInfo())
+            cout << "INFO:[" << info_item << ']' << endl;
 
         RETRY_UNTIL_OK_AND_SKIP_LINE_ON_ERROR(
-                vcf_scanner.ParseGenotypeFormat());
-        cout << "FORMAT:["
-             << vcf_scanner.GetGenotypeFormat();
-        while (vcf_scanner.HasAnotherGenotypeFormat()) {
-            RETRY_UNTIL_OK_AND_SKIP_LINE_ON_ERROR(
-                    vcf_scanner.ParseGenotypeFormat());
-            cout << " and " << vcf_scanner.GetGenotypeFormat();
-        }
-        cout << ']' << endl; */
+                vcf_scanner.ParseGenotypeFormats());
+        for (const auto& gtyp_fmt : vcf_scanner.GetGenotypeFormats())
+            cout << "FORMAT:[" << gtyp_fmt << ']' << endl;
 
         RETRY_UNTIL_OK_AND_SKIP_LINE_ON_ERROR(vcf_scanner.ParseGenotype());
         cout << "GENOTYPE:[" << vcf_scanner.GetGenotype();
@@ -849,20 +839,6 @@ int main()
 
         cout << endl;
     }
-
-    /* // Read data lines
-        case CVCFScanner::eInfoField:
-            break;
-        case CVCFScanner::eGenotypeField:
-            break;
-        case CVCFScanner::eEndOfDataLine:
-            break;
-        case CVCFScanner::eEndOfStream:
-            return 0;
-        }
-    }
-
-    pe = vcf_scanner.NextEvent(); */
 
     return 0;
 }
