@@ -13,6 +13,7 @@ class CVCFTokenizer
 public:
     void SetNewBuffer(const char* buffer, size_t buffer_size)
     {
+        // cout << "<[" << string(buffer, buffer_size) << ']' << endl;
         m_CurrentPtr = (m_RemainingSize = buffer_size) > 0 ? buffer : nullptr;
     }
 
@@ -97,7 +98,7 @@ public:
     EIntParsingResult ParseUnsignedInt(unsigned* number, unsigned* number_len)
     {
         if (m_RemainingSize == 0) {
-            if (AtEOF()) {
+            if (m_CurrentPtr == nullptr) {
                 x_SetTokenTermAndPossiblyIncrementLineNumber(EOF);
                 return eEndOfNumber;
             }
@@ -110,6 +111,8 @@ public:
             if ((digit = (unsigned) *m_CurrentPtr - '0') > 9) {
                 x_SetTokenTermAndPossiblyIncrementLineNumber(
                         (unsigned char) *m_CurrentPtr);
+                ++m_CurrentPtr;
+                --m_RemainingSize;
                 return eEndOfNumber;
             }
 
@@ -129,9 +132,7 @@ public:
     bool PrepareTokenOrAccumulate(const char* const end_of_token)
     {
         if (end_of_token == nullptr) {
-            if (!AtEOF()) {
-                x_SetTokenTermAndPossiblyIncrementLineNumber('\0');
-
+            if (m_CurrentPtr != nullptr) { // Check for EOF
                 if (m_Accumulating)
                     m_Accumulator.append(m_CurrentPtr, m_RemainingSize);
                 else {
@@ -192,10 +193,9 @@ public:
         m_Accumulating = false;
 
         if (end_of_token == nullptr) {
-            if (!AtEOF()) {
-                x_SetTokenTermAndPossiblyIncrementLineNumber('\0');
+            if (m_CurrentPtr != nullptr) // Check for EOF
                 return false;
-            }
+
             // EOF has been reached.
             x_SetTokenTermAndPossiblyIncrementLineNumber(EOF);
             return true;

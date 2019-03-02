@@ -705,7 +705,7 @@ static ssize_t s_ReadVCFFile(void* target_buffer, size_t buffer_size)
         cerr << "file.vcf:" << vcf_scanner.GetLineNumber() << ": "             \
              << vcf_scanner.GetError().m_ErrorMessage << endl                  \
              << endl;                                                          \
-        goto NextLine;                                                         \
+        continue;                                                              \
     }
 
 int main()
@@ -741,7 +741,6 @@ int main()
 
     cout << endl << "[Data Lines]" << endl;
     for (;;) {
-    NextLine:
         RETRY_UNTIL_OK_AND_SKIP_LINE_ON_ERROR(vcf_scanner.Rewind());
         if (vcf_scanner.AtEOF())
             break;
@@ -749,8 +748,8 @@ int main()
         cout << '#' << vcf_scanner.GetLineNumber() << endl;
 
         RETRY_UNTIL_OK_AND_SKIP_LINE_ON_ERROR(vcf_scanner.ParseLoc());
-        cout << "CHROM:[" << vcf_scanner.GetChrom() << ']' << endl;
-        cout << "POS:[" << vcf_scanner.GetPos() << ']' << endl;
+        cout << "CHROM:[" << vcf_scanner.GetChrom() << ']' << endl
+             << "POS:[" << vcf_scanner.GetPos() << ']' << endl;
 
         RETRY_UNTIL_OK_AND_SKIP_LINE_ON_ERROR(vcf_scanner.ParseID());
         cout << "ID:[" << vcf_scanner.GetID();
