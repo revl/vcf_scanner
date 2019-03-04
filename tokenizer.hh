@@ -131,6 +131,8 @@ public:
 
     bool PrepareTokenOrAccumulate(const char* const end_of_token)
     {
+        m_Skipping = false;
+
         if (end_of_token == nullptr) {
             if (m_CurrentPtr != nullptr) { // Check for EOF
                 if (m_Accumulating)
@@ -193,18 +195,39 @@ public:
         m_Accumulating = false;
 
         if (end_of_token == nullptr) {
-            if (m_CurrentPtr != nullptr) // Check for EOF
+            if (m_CurrentPtr != nullptr) { // Check for EOF
+                if (m_Skipping)
+                    m_BytesSkipped += m_RemainingSize;
+                else {
+                    m_Skipping = true;
+                    m_BytesSkipped = m_RemainingSize;
+                }
+
                 return false;
+            }
 
             // EOF has been reached.
             x_SetTokenTermAndPossiblyIncrementLineNumber(EOF);
+            if (!m_Skipping)
+                m_BytesSkipped = 0;
+            else
+                m_Skipping = false;
             return true;
         }
 
         x_SetTokenTermAndPossiblyIncrementLineNumber(
                 (unsigned char) *end_of_token);
 
-        x_AdvanceBy(end_of_token + 1 - m_CurrentPtr);
+        const size_t skipped_len = end_of_token - m_CurrentPtr;
+
+        if (!m_Skipping)
+            m_BytesSkipped = skipped_len;
+        else {
+            m_Skipping = false;
+            m_BytesSkipped += skipped_len;
+        }
+
+        x_AdvanceBy(skipped_len + 1);
 
         return true;
     }
@@ -212,6 +235,38 @@ public:
     const string& GetToken() const
     {
         return m_Token;
+    }
+
+    bool GetTokenAsUInt(unsigned* number) const
+    {
+        unsigned len = (unsigned int) m_Token.size();
+
+        if (len == 0)
+            return false;
+
+        *number = 0;
+
+        const char* ptr = m_Token.data();
+        unsigned digit;
+
+        do {
+            if ((digit = (unsigned) *ptr - '0') > 9)
+                return false;
+
+            if (*number > (UINT_MAX / 10) ||
+                    (*number == (UINT_MAX / 10) && digit > UINT_MAX % 10))
+                return false;
+
+            *number = *number * 10 + digit;
+            ++ptr;
+        } while (--len > 0);
+
+        return true;
+    }
+
+    size_t GetBytesSkipped() const
+    {
+        return m_BytesSkipped;
     }
 
     bool TokenIsDot() const
@@ -293,6 +348,13 @@ public:
         m_NewlineOrTabOrColon['\n'] = true;
         m_NewlineOrTabOrColon['\t'] = true;
         m_NewlineOrTabOrColon[':'] = true;
+
+        memset(m_NewlineTabColonSlashBar, 0, sizeof(m_NewlineTabColonSlashBar));
+        m_NewlineTabColonSlashBar['\n'] = true;
+        m_NewlineTabColonSlashBar['\t'] = true;
+        m_NewlineTabColonSlashBar[':'] = true;
+        m_NewlineTabColonSlashBar['/'] = true;
+        m_NewlineTabColonSlashBar['|'] = true;
     }
 
 private:
@@ -304,6 +366,9 @@ private:
 
     string m_Accumulator;
     bool m_Accumulating = false;
+
+    size_t m_BytesSkipped;
+    bool m_Skipping = false;
 
     string m_Token;
 
@@ -320,4 +385,6 @@ public:
     bool m_NewlineOrTabOrComma[256];
     // For extracting FORMAT or GENOTYPE
     bool m_NewlineOrTabOrColon[256];
+    // For extracting the GT values
+    bool m_NewlineTabColonSlashBar[256];
 };
