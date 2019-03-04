@@ -1,3 +1,30 @@
+/* ===========================================================================
+ *
+ *                            PUBLIC DOMAIN NOTICE
+ *               National Center for Biotechnology Information
+ *
+ *  This software/database is a "United States Government Work" under the
+ *  terms of the United States Copyright Act.  It was written as part of
+ *  the author's official duties as a United States Government employee and
+ *  thus cannot be copyrighted.  This software/database is freely available
+ *  to the public for use. The National Library of Medicine and the U.S.
+ *  Government have not placed any restriction on its use or reproduction.
+ *
+ *  Although all reasonable efforts have been taken to ensure the accuracy
+ *  and reliability of the software and data, the NLM and the U.S.
+ *  Government do not and cannot warrant the performance or results that
+ *  may be obtained by using this software or data. The NLM and the U.S.
+ *  Government disclaim all warranties, express or implied, including
+ *  warranties of performance, merchantability or fitness for any particular
+ *  purpose.
+ *
+ *  Please cite the author in any work or product based on this material.
+ *
+ * ===========================================================================
+ */
+
+#pragma once
+
 #include <string>
 #include <string.h>
 #include <iostream>
@@ -8,12 +35,14 @@
 
 using namespace std;
 
+typedef string CTempString;
+
+// CVCFTokenizer tokenizes the input VCF stream.
 class CVCFTokenizer
 {
 public:
     void SetNewBuffer(const char* buffer, size_t buffer_size)
     {
-        // cout << "<[" << string(buffer, buffer_size) << ']' << endl;
         m_CurrentPtr = (m_RemainingSize = buffer_size) > 0 ? buffer : nullptr;
     }
 
@@ -232,7 +261,7 @@ public:
         return true;
     }
 
-    const string& GetToken() const
+    const CTempString& GetToken() const
     {
         return m_Token;
     }
@@ -279,7 +308,7 @@ public:
         return m_TokenTerm == '\n' || m_TokenTerm == EOF;
     }
 
-    bool GetKeyValue(string* key, string* value, char delim = '=')
+    bool GetKeyValue(CTempString* key, CTempString* value, char delim = '=')
     {
         size_t delim_pos = m_Token.find(delim);
 
@@ -370,7 +399,7 @@ private:
     size_t m_BytesSkipped;
     bool m_Skipping = false;
 
-    string m_Token;
+    CTempString m_Token;
 
 public:
     // For parsing the meta-information lines
