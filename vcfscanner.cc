@@ -1,6 +1,7 @@
 #include <string>
 #include <vector>
 #include <map>
+#include <set>
 #include <iostream>
 #include <cassert>
 #include <stdio.h>
@@ -50,6 +51,11 @@ private:
     friend class CVCFScanner;
 };
 
+struct CVCFWarning {
+    unsigned line_number;
+    string warning_message;
+};
+
 // CVCFScanner parses VCF (Variant Call Format) files.
 //
 // First, CVCFScanner parses the header in its entirety,
@@ -86,15 +92,16 @@ public:
     void SetNewInputBuffer(const char* buffer, ssize_t buffer_size);
 
     enum EParsingEvent {
+        eNeedMoreData, // The parser needs a new input buffer to
+                       // continue parsing.
+
         eOK, // The current token (the VCF header or a data field) has
              // been successfully parsed. Header meta-information or
              // the data field value is now available for retrieval.
 
-        eNeedMoreData, // The parser needs a new input buffer to
-                       // continue parsing.
-
-        eWarning, // The parser has generated a warning. Use
-                  // GetWarning() to retrieve the warning message.
+        eOKWithWarnings, // The token has been successfully parsed, but
+                         // parser encountered issues during parsing. Use
+                         // GetWarnings() to retrieve the warning messages.
 
         eError // A parsing error has occurred. Use GetError() to get
                // the error report.
@@ -104,7 +111,7 @@ public:
                //
                // If the error happened while parsing a data line, there
                // is an option to ignore it and skip to the next line
-               // by calling ClearLine().
+               // by calling Rewind().
     };
 
     // GetLineNumber returns the current line number in the
@@ -114,9 +121,9 @@ public:
         return m_Tokenizer.GetLineNumber();
     }
 
-    CErrorReport GetWarning() const
+    vector<CVCFWarning> GetWarnings() const
     {
-        return CErrorReport{"hello"};
+        return m_Warnings;
     }
 
     CErrorReport GetError() const
@@ -141,7 +148,10 @@ public:
     // line was skipped due to an error or due to the lack of
     // interest in it from the client code, this operation may
     // require more data to be read.
-    EParsingEvent Rewind();
+    // Rewind returns false if the parser needs more input data
+    // to detect the end-of-file condition. Supply more data by
+    // calling SetNewInputBuffer until Rewind returns true.
+    bool Rewind();
 
     // AtEOF returns true if the entire input stream has been
     // successfully parsed. The method returns false if the
@@ -211,33 +221,43 @@ public:
         return m_Info;
     }
 
-    // ParseGenotypeFormats parses the genotype format keys.
-    EParsingEvent ParseGenotypeFormats();
+    // ParseGenotypeFormat parses the genotype format keys.
+    EParsingEvent ParseGenotypeFormat();
+
     // GetGenotypeFormat returns the FORMAT field parsed by
     // ParseGenotypeFormat.
-    const vector<string>& GetGenotypeFormats() const
-    {
-        return m_GenotypeFormats;
-    }
+    // TODO const TGenotypeFormat& GetGenotypeFormat() const;
+
+    // CaptureGT binds or re-binds a client-side variable to receive
+    // GT values as they are parsed by the ParseGenotype method below.
+    // Use the IsPhasedGT method to check whether the sample was phased.
+    // CaptureGT returns false and does nothing if the GT key was not
+    // specified in the FORMAT field.
+    // Set alleles to NULL to stop receiving the GT values.
+    bool CaptureGT(vector<int>* alleles);
+
+    // TODO bool CaptureString(const char* key, string* value);
+    // TODO bool CaptureStrings(const char* key, vector<string>* values);
+    // TODO bool CaptureInt(const char* key, int* value);
+    // TODO bool CaptureInts(const char* key, vector<int>* values);
 
     // ParseGenotype sequentially parses genotype fields.
     EParsingEvent ParseGenotype();
-    // GetGenotype returns the genotype field parsed by ParseGenotype.
-    string GetGenotype() const
+
+    // IsPhasedGT returns true if the parsed sample was phased.
+    bool IsPhasedGT() const
     {
-        return m_Tokenizer.GetToken();
+        return m_PhasedGT;
     }
-    // HasAnotherGenotype returns true if another genotype value is available.
-    // ParseGenotype followed by GetGenotype must be called to retrieve it.
-    bool HasAnotherGenotype() const
+
+    // GenotypeAvailable returns true if at least one more genotype
+    // field is available. The caller has an option to either use
+    // this method or count the retrieved genotypes to determine
+    // when to stop parsing the current data line.
+    bool GenotypeAvailable() const
     {
         return m_Tokenizer.GetTokenTerm() == '\t';
     }
-
-    // Finishes parsing of the current line. This method must
-    // be called repeatedly until it returns eOK thus confirming
-    // that the end of the current line has been reached.
-    EParsingEvent ClearLine();
 
 private:
     enum EHeaderParsingState {
@@ -296,6 +316,7 @@ private:
     const char* m_Buffer;
     size_t m_BufferSize = 0;
 
+    vector<CVCFWarning> m_Warnings;
     CErrorReport m_ErrorReport;
 
     CVCFTokenizer m_Tokenizer;
@@ -309,11 +330,91 @@ private:
     vector<string> m_IDs;
     string m_Ref;
     vector<string> m_Alts;
+    bool m_AllelesParsed;
     string m_Quality;
     vector<string> m_Filters;
     vector<string> m_Info;
-    vector<string> m_GenotypeFormats;
-    vector<string> m_GenotypeInfo;
+
+    // TODO Implement the INFO and FORMAT type definitions in the header.
+    set<string> m_FormatKeys;
+
+    struct CLessCStr {
+        bool operator()(const char* left, const char* right) const
+        {
+            return strcmp(left, right) < 0;
+        }
+    };
+
+    // Positions of the reserved genotype keys in the FORMAT field.
+    struct SGenotypeKeyPositions {
+        unsigned number_of_positions;
+        unsigned GT;
+        map<const char*, unsigned, CLessCStr> other_keys;
+
+        void Clear()
+        {
+            GT = number_of_positions = 0;
+            other_keys.clear();
+        }
+    } m_GenotypeKeyPositions;
+
+    enum EDataType { eInteger, eFloat, eFlag, eCharacter, eString, eGT };
+
+    enum ENumberOfValues {
+        eScalar,
+        eOnePerAlt,
+        eOnePerAllele,
+        eOnePerGenotype,
+        eUnbound,
+        eExactNumber
+    };
+
+    struct SGenotypeValue {
+        EDataType data_type;
+        unsigned number_of_values;
+        union {
+            bool* flag;
+            int* int_scalar;
+            vector<int>* int_vector;
+            string* string_scalar;
+            vector<string>* string_vector;
+            char* char_scalar;
+            vector<char>* char_vector;
+        };
+    };
+
+    vector<SGenotypeValue> m_GenotypeValues;
+    unsigned m_CurrentGenotypeValueIndex;
+    union {
+        int m_IntAcc;
+        unsigned m_UIntAcc;
+    };
+    unsigned m_Ploidy;
+    bool m_PhasedGT;
+
+    void x_ClearGenotypeValues()
+    {
+        memset(m_GenotypeValues.data(), 0,
+                (char*) &*m_GenotypeValues.end() -
+                        (char*) m_GenotypeValues.data());
+        m_CurrentGenotypeValueIndex = 0;
+        m_Ploidy = 0;
+        m_NumberLen = 0;
+    }
+
+    SGenotypeValue* x_AllocGenotypeValue(unsigned index)
+    {
+        if (m_GenotypeValues.size() <= index) {
+            size_t old_size = m_GenotypeValues.size();
+            m_GenotypeValues.resize(index + 1);
+            char* new_struct_ptr = (char*) (m_GenotypeValues.data() + old_size);
+            memset(new_struct_ptr, 0,
+                    (char*) &*m_GenotypeValues.end() - (char*) new_struct_ptr);
+        }
+        return m_GenotypeValues.data() + index;
+    }
+
+    const char* x_ParseGT(vector<int>* int_vector);
 };
 
 void CVCFScanner::SetNewInputBuffer(const char* buffer, ssize_t buffer_size)
@@ -447,20 +548,21 @@ InvalidHeaderLine:
     return x_HeaderError("Malformed VCF header line");
 }
 
-CVCFScanner::EParsingEvent CVCFScanner::Rewind()
+bool CVCFScanner::Rewind()
 {
     if (m_Tokenizer.AtEOF())
-        return eOK;
+        return true;
 
     if (m_Tokenizer.BufferIsEmpty())
-        return eNeedMoreData;
+        return false;
 
     if (m_DataLineParsingState != eEndOfDataLine &&
             !m_Tokenizer.SkipToken(m_Tokenizer.FindNewline()))
-        return eNeedMoreData;
+        return false;
 
     m_DataLineParsingState = eChrom;
-    return eOK;
+    m_AllelesParsed = false;
+    return true;
 }
 
 #define PARSE_STRING_FIELD(target_state)                                       \
@@ -519,7 +621,7 @@ CVCFScanner::EParsingEvent CVCFScanner::ParseLoc()
             container.push_back(m_Tokenizer.GetToken());                       \
     } while (m_Tokenizer.GetTokenTerm() != '\t');
 
-#define REALLY_DO_SKIP_TO_FIELD(field)                                         \
+#define SKIP_TO_FIELD(field)                                                   \
     do {                                                                       \
         if (!m_Tokenizer.SkipToken(m_Tokenizer.FindNewlineOrTab()))            \
             return eNeedMoreData;                                              \
@@ -536,7 +638,7 @@ CVCFScanner::EParsingEvent CVCFScanner::ParseIDs()
     }
 
     if (m_DataLineParsingState < eID) {
-        REALLY_DO_SKIP_TO_FIELD(eID);
+        SKIP_TO_FIELD(eID);
         m_IDs.clear();
     }
 
@@ -554,7 +656,7 @@ CVCFScanner::EParsingEvent CVCFScanner::ParseAlleles()
     }
 
     if (m_DataLineParsingState < eRef) {
-        REALLY_DO_SKIP_TO_FIELD(eRef);
+        SKIP_TO_FIELD(eRef);
     }
 
     if (m_DataLineParsingState == eRef) {
@@ -566,6 +668,8 @@ CVCFScanner::EParsingEvent CVCFScanner::ParseAlleles()
     }
 
     PARSE_LIST_FIELD(eQuality, m_Alts, m_Tokenizer.m_NewlineOrTabOrComma);
+
+    m_AllelesParsed = true;
 
     m_DataLineParsingState = eQuality;
     return eOK;
@@ -579,7 +683,7 @@ CVCFScanner::EParsingEvent CVCFScanner::ParseQuality()
     }
 
     if (m_DataLineParsingState < eQuality) {
-        REALLY_DO_SKIP_TO_FIELD(eQuality);
+        SKIP_TO_FIELD(eQuality);
     }
 
     PARSE_STRING_FIELD(eQuality);
@@ -602,7 +706,7 @@ CVCFScanner::EParsingEvent CVCFScanner::ParseFilters()
     }
 
     if (m_DataLineParsingState < eFilter) {
-        REALLY_DO_SKIP_TO_FIELD(eFilter);
+        SKIP_TO_FIELD(eFilter);
         m_Filters.clear();
     }
 
@@ -622,80 +726,235 @@ CVCFScanner::EParsingEvent CVCFScanner::ParseInfo()
     }
 
     if (m_DataLineParsingState < eInfoField) {
-        REALLY_DO_SKIP_TO_FIELD(eInfoField);
+        SKIP_TO_FIELD(eInfoField);
         m_Info.clear();
     }
 
-    for (;;) {
+    do {
         if (!m_Tokenizer.PrepareTokenOrAccumulate(m_Tokenizer.FindCharFromSet(
                     m_Tokenizer.m_NewlineOrTabOrSemicolon)))
             return eNeedMoreData;
-        switch (m_Tokenizer.GetTokenTerm()) {
-        case EOF:
-        case '\n':
+        if (m_Tokenizer.TokenIsLast()) {
             m_DataLineParsingState = eEndOfDataLine;
-            return eOK;
-        case '\t':
-            m_DataLineParsingState = eGenotypeFormat;
-            m_GenotypeFormats.clear();
             return eOK;
         }
         if (!m_Tokenizer.TokenIsDot())
             m_Info.push_back(m_Tokenizer.GetToken());
-    }
+    } while (m_Tokenizer.GetTokenTerm() != '\t');
+
+    m_DataLineParsingState = eGenotypeFormat;
+    m_GenotypeKeyPositions.Clear();
+    return eOK;
 }
 
-CVCFScanner::EParsingEvent CVCFScanner::ParseGenotypeFormats()
+CVCFScanner::EParsingEvent CVCFScanner::ParseGenotypeFormat()
 {
     if (m_DataLineParsingState > eGenotypeFormat) {
-        assert(false && "Must call Rewind() before ParseGenotypeFormats()");
+        assert(false && "Must call Rewind() before ParseGenotypeFormat()");
         return eError;
     }
 
     if (m_DataLineParsingState < eGenotypeFormat) {
-        REALLY_DO_SKIP_TO_FIELD(eGenotypeFormat);
-        m_GenotypeFormats.clear();
+        SKIP_TO_FIELD(eGenotypeFormat);
+        m_GenotypeKeyPositions.Clear();
     }
 
-    for (;;) {
+    do {
         if (!m_Tokenizer.PrepareTokenOrAccumulate(m_Tokenizer.FindCharFromSet(
                     m_Tokenizer.m_NewlineOrTabOrColon)))
             return eNeedMoreData;
-        switch (m_Tokenizer.GetTokenTerm()) {
-        case EOF:
-        case '\n':
+        if (m_Tokenizer.TokenIsLast()) {
             m_DataLineParsingState = eEndOfDataLine;
-            return eOK;
-        case '\t':
-            m_DataLineParsingState = eGenotypes;
-            m_GenotypeInfo.clear();
-            return eOK;
+            if (m_Header.m_SampleIDs.empty())
+                return eOK;
+            return x_DataLineError("No genotype information present");
         }
-        if (!m_Tokenizer.TokenIsDot())
-            m_GenotypeFormats.push_back(m_Tokenizer.GetToken());
-    }
+        string key = m_Tokenizer.GetToken();
+        auto key_iter = m_FormatKeys.insert(key).first;
+        if (key == "GT") {
+            if (m_GenotypeKeyPositions.number_of_positions != 0) {
+                // TODO Generate a warning: GT must be the first key.
+            }
+            m_GenotypeKeyPositions.GT =
+                    ++m_GenotypeKeyPositions.number_of_positions;
+        } else
+            m_GenotypeKeyPositions.other_keys[key_iter->c_str()] =
+                    ++m_GenotypeKeyPositions.number_of_positions;
+    } while (m_Tokenizer.GetTokenTerm() != '\t');
+
+    m_DataLineParsingState = eGenotypes;
+    x_ClearGenotypeValues();
+    return eOK;
 }
 
-#define SKIP_TO_FIELD(new_state)                                               \
-    for (; m_DataLineParsingState < new_state; ++m_DataLineParsingState) {     \
-        if (!m_Tokenizer.SkipToken(m_Tokenizer.FindNewlineOrTab()))            \
-            return eNeedMoreData;                                              \
-        switch (m_Tokenizer.GetTokenTerm()) {                                  \
-        case EOF:                                                              \
-        case '\n':                                                             \
-            return x_MissingMandatoryFieldError(                               \
-                    m_HeaderLineColumns[new_state]);                           \
-        }                                                                      \
+bool CVCFScanner::CaptureGT(vector<int>* alleles)
+{
+    unsigned gt_index = m_GenotypeKeyPositions.GT;
+    if (gt_index == 0)
+        return false;
+    --gt_index;
+    auto gt_value = x_AllocGenotypeValue(gt_index);
+    gt_value->data_type = eGT;
+    gt_value->int_vector = alleles;
+    alleles->clear();
+    return true;
+}
+
+const char* CVCFScanner::x_ParseGT(vector<int>* int_vector)
+{
+    int_vector->clear();
+
+    const string& token = m_Tokenizer.GetToken();
+
+    size_t len = token.length();
+
+    if (len == 0)
+        return "Empty GT value";
+
+    const char* ptr = token.data();
+    unsigned digit, allele;
+
+    for (;; ++ptr, --len) {
+        if (*ptr == '.') {
+            int_vector->push_back(-1);
+            ++ptr;
+            --len;
+        } else {
+            if ((allele = (unsigned) *ptr - '0') > 9)
+                break;
+
+            while (--len > 0 && (digit = (unsigned) *++ptr - '0') <= 9) {
+                if (allele > (UINT_MAX / 10) ||
+                        (allele == (UINT_MAX / 10) && digit > UINT_MAX % 10))
+                    return "Integer overflow in allele index";
+
+                allele = allele * 10 + digit;
+            }
+
+            int_vector->push_back((int) allele);
+
+            if (m_AllelesParsed && allele > m_Alts.size())
+                return "Allele index exceeds the number of alleles";
+        }
+        if (len == 0)
+            return nullptr;
+        switch (*ptr) {
+        case '/':
+            m_PhasedGT = false;
+            continue;
+        case '|':
+            m_PhasedGT = true;
+            continue;
+        }
+        break;
     }
+    return "Invalid character in GT value";
+}
 
 CVCFScanner::EParsingEvent CVCFScanner::ParseGenotype()
 {
-    assert(m_DataLineParsingState <= eGenotypes &&
-            "Must Rewind() before ParseGenotype()");
+    if (m_DataLineParsingState != eGenotypes) {
+        assert(false &&
+                "Must call ParseGenotypeFormat() before ParseGenotype()");
+        return eError;
+    }
 
-    SKIP_TO_FIELD(eGenotypes);
+    if (m_CurrentGenotypeValueIndex >=
+            m_GenotypeKeyPositions.number_of_positions)
+        return x_DataLineError(
+                "The number of genotype fields exceeds the number of samples");
 
-    if (!m_Tokenizer.PrepareTokenOrAccumulate(
+    SGenotypeValue* value =
+            m_GenotypeValues.data() + m_CurrentGenotypeValueIndex;
+
+    const char* error_message;
+
+    do {
+        if (value->flag == nullptr) {
+            if (!m_Tokenizer.SkipToken(m_Tokenizer.FindNewlineOrTabOrColon()))
+                return eNeedMoreData;
+            if (m_Tokenizer.TokenIsLast()) {
+                m_DataLineParsingState = eEndOfDataLine;
+                return eOK;
+            }
+        } else {
+            if (!m_Tokenizer.PrepareTokenOrAccumulate(
+                        m_Tokenizer.FindCharFromSet(
+                                m_Tokenizer.m_NewlineOrTabOrColon)))
+                return eNeedMoreData;
+
+            if (m_Tokenizer.TokenIsLast())
+                m_DataLineParsingState = eEndOfDataLine;
+
+            switch (value->data_type) {
+            // TODO case eInteger:
+            // TODO case eFloat:
+            // TODO case eCharacter:
+            // TODO case eString:
+            case eGT:
+                error_message = x_ParseGT(value->int_vector);
+                if (error_message != nullptr)
+                    return x_DataLineError(error_message);
+                break;
+            default /* eFlag - impossible type for genotype info */:
+                break;
+            }
+
+            if (m_Tokenizer.TokenIsLast())
+                return eOK;
+        }
+        if (m_Tokenizer.GetTokenTerm() == '\t')
+            return eOK;
+
+        ++value;
+    } while (++m_CurrentGenotypeValueIndex <
+            m_GenotypeKeyPositions.number_of_positions);
+
+    return x_DataLineError("Too many genotype info fields");
+
+    /* do {
+        if (!m_Tokenizer.PrepareTokenOrAccumulate(
+                    m_Tokenizer.FindCharFromSet(
+                            m_Tokenizer.m_NewlineTabColonSlashBar)))
+            return eNeedMoreData;
+        if (m_Tokenizer.TokenIsLast()) {
+            m_DataLineParsingState = eEndOfDataLine;
+        }
+
+        unsigned allele_index;
+        if (!m_Tokenizer.GetTokenAsUInt(&allele_index)) {
+            if (m_Tokenizer.GetToken() != ".")
+                return x_DataLineError(
+                        "GT values must be either numbers or dots");
+            value.int_vector->push_back(-1);
+        } else {
+            if (m_AllelesParsed && m_UIntAcc > m_Alts.size())
+                return x_DataLineError(
+                        "Allele index exceeds the number of alleles");
+            value.int_vector->push_back((int) m_UIntAcc);
+        }
+    } while (m_Tokenizer.GetTokenTerm() != '\t');
+
+    switch (m_Tokenizer.ParseUnsignedInt(&m_UIntAcc, &m_NumberLen)) {
+    case CVCFTokenizer::eEndOfBuffer:
+        return eNeedMoreData;
+    case CVCFTokenizer::eIntegerOverflow:
+        // TODO ERR+=in genotype info for sample m_CurrentGenotypeValueIndex
+        return x_DataLineError("Integer overflow in allele index");
+    default / * case CVCFTokenizer::eEndOfNumber * /:
+        break;
+    }
+    if (m_NumberLen == 0) {
+        if (m_Tokenizer.GetTokenTerm() != '.')
+            value.int_vector->push_back(-1);
+    } else {
+        if (m_AllelesParsed && m_UIntAcc > m_Alts.size())
+            return x_DataLineError(
+                    "Allele index exceeds the number of alleles");
+        value.int_vector->push_back((int) m_UIntAcc);
+    } */
+
+    /* if (!m_Tokenizer.PrepareTokenOrAccumulate(
                 m_Tokenizer.FindCharFromSet(m_Tokenizer.m_NewlineOrTab)))
         return eNeedMoreData;
 
@@ -705,21 +964,18 @@ CVCFScanner::EParsingEvent CVCFScanner::ParseGenotype()
         m_DataLineParsingState = eEndOfDataLine;
     }
 
-    return eOK;
+    return eOK; */
+
+    /* EOLHandler:
+
+        m_DataLineParsingState = eEndOfDataLine; */
 }
 
-static const char vcf_file[] =
-        "##fileformat=VCFv4.0\n"
-        "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">\r\n"
-        "#CHROM	POS	ID	REF	ALT	QUAL	FILTER	"
-        "INFO	"
-        "FORMAT	S-1	S-2	S-3\n"
-        "1	100000	rs123;rs333	C	G	10	.	"
-        ".	"
-        "GT	0|M	1/.	1/0\n"
-        "2	200000	.	C	G,T	.	PASS	"
-        "NS=3;DP=14;AF=0.5;DB;H2	"
-        "GT	0|0	0|1	1|E";
+static const char vcf_file[] = R"(##fileformat=VCFv4.0
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	S-1	S-2	S-3
+1	100000	rs123;rs333	C	G	10	.	.	GT	0|1	1/.	1/0
+2	200000	.	C	G,T	.	PASS	NS=3;DP=14;AF=0.5;DB;H2	GT	0|0	0|1	1|2)";
 
 static const char* vcf_eof_ptr = vcf_file + sizeof(vcf_file) - 1;
 static const char* current_ptr = vcf_file;
@@ -734,44 +990,90 @@ static ssize_t s_ReadVCFFile(void* target_buffer, size_t buffer_size)
     return buffer_size;
 }
 
-#define RETRY_UNTIL_OK_OR_ERROR(vcf_scanner_call)                              \
-    for (;;) {                                                                 \
-        switch (pe = (vcf_scanner_call)) {                                     \
-        case CVCFScanner::eWarning:                                            \
-            cerr << vcf_scanner.GetWarning().m_ErrorMessage << endl;           \
-            continue;                                                          \
-        case CVCFScanner::eNeedMoreData:                                       \
-            vcf_scanner.SetNewInputBuffer(                                     \
-                    buffer, s_ReadVCFFile(buffer, sizeof(buffer)));            \
-            continue;                                                          \
-        default:                                                               \
-            break;                                                             \
-        }                                                                      \
-        break;                                                                 \
+static char buffer[1];
+
+#define SET_NEW_BUFFER()                                                       \
+    vcf_scanner.SetNewInputBuffer(buffer, s_ReadVCFFile(buffer, sizeof(buffer)))
+
+#define RETRY_UNTIL_OK_OR_ERROR(method)                                        \
+    while ((pe = vcf_scanner.method()) == CVCFScanner::eNeedMoreData)          \
+        SET_NEW_BUFFER();                                                      \
+    if (pe == CVCFScanner::eOKWithWarnings) {                                  \
+        for (const auto& warning : vcf_scanner.GetWarnings())                  \
+            cerr << "Warning: " << warning.warning_message << endl;            \
+        pe = CVCFScanner::eOK;                                                 \
     }
 
-#define RETRY_UNTIL_OK_AND_SKIP_LINE_ON_ERROR(vcf_scanner_call)                \
-    RETRY_UNTIL_OK_OR_ERROR(vcf_scanner_call);                                 \
+#define RETRY_UNTIL_OK_OR_SKIP_LINE(method)                                    \
+    RETRY_UNTIL_OK_OR_ERROR(method);                                           \
     if (pe == CVCFScanner::eError) {                                           \
         cerr << "file.vcf:" << vcf_scanner.GetLineNumber() << ": "             \
              << vcf_scanner.GetError().m_ErrorMessage << endl                  \
              << endl;                                                          \
-        continue;                                                              \
+        return;                                                                \
     }
+
+static void ParseDataLine(CVCFScanner& vcf_scanner)
+{
+    CVCFScanner::EParsingEvent pe;
+
+    cout << '#' << vcf_scanner.GetLineNumber() << endl;
+
+    RETRY_UNTIL_OK_OR_SKIP_LINE(ParseLoc);
+    cout << "CHROM:[" << vcf_scanner.GetChrom() << ']' << endl
+         << "POS:[" << vcf_scanner.GetPos() << ']' << endl;
+
+    RETRY_UNTIL_OK_OR_SKIP_LINE(ParseIDs);
+    for (const auto& id : vcf_scanner.GetIDs())
+        cout << "ID:[" << id << ']' << endl;
+
+    RETRY_UNTIL_OK_OR_SKIP_LINE(ParseAlleles);
+    cout << "REF:[" << vcf_scanner.GetRef() << ']' << endl;
+    for (const auto& alt : vcf_scanner.GetAlts())
+        cout << "ALT:[" << alt << ']' << endl;
+
+    RETRY_UNTIL_OK_OR_SKIP_LINE(ParseQuality);
+    string quality = vcf_scanner.GetQuality();
+    if (!quality.empty())
+        cout << "QUAL:[" << quality << ']' << endl;
+
+    RETRY_UNTIL_OK_OR_SKIP_LINE(ParseFilters);
+    for (const auto& filter : vcf_scanner.GetFilters())
+        cout << "FILTER:[" << filter << ']' << endl;
+
+    RETRY_UNTIL_OK_OR_SKIP_LINE(ParseInfo);
+    for (const auto& info_item : vcf_scanner.GetInfo())
+        cout << "INFO:[" << info_item << ']' << endl;
+
+    RETRY_UNTIL_OK_OR_SKIP_LINE(ParseGenotypeFormat);
+
+    vector<int> alleles;
+
+    if (!vcf_scanner.CaptureGT(&alleles)) {
+        cout << "ERR: no GT key" << endl;
+        return;
+    }
+
+    while (vcf_scanner.GenotypeAvailable()) {
+        RETRY_UNTIL_OK_OR_SKIP_LINE(ParseGenotype);
+        cout << "---" << endl;
+        for (auto allele : alleles)
+            cout << "GT:[" << allele << ']' << endl;
+    }
+
+    cout << endl;
+}
 
 int main()
 {
-    char buffer[1];
-
     CVCFScanner vcf_scanner;
 
-    vcf_scanner.SetNewInputBuffer(
-            buffer, s_ReadVCFFile(buffer, sizeof(buffer)));
+    SET_NEW_BUFFER();
 
     CVCFScanner::EParsingEvent pe;
 
     // Read the header
-    RETRY_UNTIL_OK_OR_ERROR(vcf_scanner.ParseHeader());
+    RETRY_UNTIL_OK_OR_ERROR(ParseHeader);
 
     if (pe != CVCFScanner::eOK) {
         cerr << vcf_scanner.GetError().m_ErrorMessage << endl;
@@ -792,52 +1094,12 @@ int main()
 
     cout << endl << "[Data Lines]" << endl;
     for (;;) {
-        RETRY_UNTIL_OK_AND_SKIP_LINE_ON_ERROR(vcf_scanner.Rewind());
+        while (!vcf_scanner.Rewind())
+            SET_NEW_BUFFER();
         if (vcf_scanner.AtEOF())
             break;
 
-        cout << '#' << vcf_scanner.GetLineNumber() << endl;
-
-        RETRY_UNTIL_OK_AND_SKIP_LINE_ON_ERROR(vcf_scanner.ParseLoc());
-        cout << "CHROM:[" << vcf_scanner.GetChrom() << ']' << endl
-             << "POS:[" << vcf_scanner.GetPos() << ']' << endl;
-
-        RETRY_UNTIL_OK_AND_SKIP_LINE_ON_ERROR(vcf_scanner.ParseIDs());
-        for (const auto& id : vcf_scanner.GetIDs())
-            cout << "ID:[" << id << ']' << endl;
-
-        RETRY_UNTIL_OK_AND_SKIP_LINE_ON_ERROR(vcf_scanner.ParseAlleles());
-        cout << "REF:[" << vcf_scanner.GetRef() << ']' << endl;
-        for (const auto& alt : vcf_scanner.GetAlts())
-            cout << "ALT:[" << alt << ']' << endl;
-
-        RETRY_UNTIL_OK_AND_SKIP_LINE_ON_ERROR(vcf_scanner.ParseQuality());
-        string quality = vcf_scanner.GetQuality();
-        if (!quality.empty())
-            cout << "QUAL:[" << quality << ']' << endl;
-
-        RETRY_UNTIL_OK_AND_SKIP_LINE_ON_ERROR(vcf_scanner.ParseFilters());
-        for (const auto& filter : vcf_scanner.GetFilters())
-            cout << "FILTER:[" << filter << ']' << endl;
-
-        RETRY_UNTIL_OK_AND_SKIP_LINE_ON_ERROR(vcf_scanner.ParseInfo());
-        for (const auto& info_item : vcf_scanner.GetInfo())
-            cout << "INFO:[" << info_item << ']' << endl;
-
-        RETRY_UNTIL_OK_AND_SKIP_LINE_ON_ERROR(
-                vcf_scanner.ParseGenotypeFormats());
-        for (const auto& gtyp_fmt : vcf_scanner.GetGenotypeFormats())
-            cout << "FORMAT:[" << gtyp_fmt << ']' << endl;
-
-        RETRY_UNTIL_OK_AND_SKIP_LINE_ON_ERROR(vcf_scanner.ParseGenotype());
-        cout << "GENOTYPE:[" << vcf_scanner.GetGenotype();
-        while (vcf_scanner.HasAnotherGenotype()) {
-            RETRY_UNTIL_OK_AND_SKIP_LINE_ON_ERROR(vcf_scanner.ParseGenotype());
-            cout << " and " << vcf_scanner.GetGenotype();
-        }
-        cout << ']' << endl;
-
-        cout << endl;
+        ParseDataLine(vcf_scanner);
     }
 
     return 0;
