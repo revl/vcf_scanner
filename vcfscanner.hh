@@ -112,10 +112,7 @@ class CVCFScanner
 public:
     CVCFScanner() {}
 
-    // SetNewInputBuffer sets the next buffer to parse. The parser stores
-    // the buffer pointer internally. Freeing the buffer will cause a
-    // segmentation fault. A buffer of zero size is treated as an EOF
-    // condition.
+    // SetNewInputBuffer sets the next buffer to parse.
     void SetNewInputBuffer(const char* buffer, ssize_t buffer_size);
 
     enum EParsingEvent {
@@ -141,6 +138,20 @@ public:
                // by calling ClearLine().
     };
 
+    // Feed supplies a chunk of input data to this parser either
+    // when the parser has just been created and is in the process
+    // of parsing the VCF header or when a previously called method
+    // returned eNeedMoreData.
+    //
+    // The parser stores the buffer pointer internally. Freeing the
+    // buffer before the parser returns eNeedMoreData from any of its
+    // methods will cause a segmentation fault. A buffer of zero size
+    // is treated as an EOF condition.
+    //
+    // Feed resumes parsing of the previously requested token and
+    // returns eOK when the entire token has been parsed.
+    EParsingEvent Feed(const char* buffer, ssize_t buffer_size);
+
     // GetLineNumber returns the current line number in the
     // input VCF file. The returned value is one-based.
     unsigned GetLineNumber() const
@@ -158,12 +169,9 @@ public:
         return m_ErrorReport;
     }
 
-    // ParseHeader begins or continues parsing the header.
-    // It returns eOK when the entire header has been parsed.
-    EParsingEvent ParseHeader();
-
-    // GetHeader returns the VCF header structure parsed by
-    // ParseHeader().
+    // GetHeader returns the VCF header, which becomes available
+    // once the last of the initial series of calls to Feed
+    // returns eOK.
     const CVCFHeader& GetHeader() const
     {
         return m_Header;
@@ -306,14 +314,28 @@ private:
 
     string m_CurrentMetaInfoKey;
 
-    static const char* const m_HeaderLineColumns[];
-
     unsigned m_HeaderLineColumnOK;
 
     EParsingEvent x_HeaderError(const char* error_message)
     {
         m_ErrorReport.m_ErrorMessage = error_message;
         return eError;
+    }
+
+    EParsingEvent x_InvalidMetaInfoLineError()
+    {
+        return x_HeaderError("Malformed meta-information line");
+    }
+
+    EParsingEvent x_UnexpectedEOFInHeader()
+    {
+        return x_HeaderError(
+                "Unexpected end of file while parsing VCF file header");
+    }
+
+    EParsingEvent x_InvalidHeaderLineError()
+    {
+        return x_HeaderError("Malformed VCF header line");
     }
 
     EParsingEvent x_HeaderNotParsedError()
@@ -337,9 +359,6 @@ private:
         return x_DataLineError(msg);
     }
 
-    const char* m_Buffer;
-    size_t m_BufferSize = 0;
-
     vector<CVCFWarning> m_Warnings;
     CErrorReport m_ErrorReport;
 
@@ -359,7 +378,7 @@ private:
     vector<string> m_Filters;
     vector<string> m_Info;
 
-    void x_ClearDataLine()
+    void x_ResetDataLine()
     {
         m_ParsingState = eChrom;
         m_AllelesParsed = false;
@@ -415,11 +434,6 @@ private:
 
     vector<SGenotypeValue> m_GenotypeValues;
     unsigned m_CurrentGenotypeValueIndex;
-    union {
-        int m_IntAcc;
-        unsigned m_UIntAcc;
-    };
-    unsigned m_Ploidy;
     bool m_PhasedGT;
 
     void x_ClearGenotypeValues()
@@ -428,7 +442,6 @@ private:
                 (char*) &*m_GenotypeValues.end() -
                         (char*) m_GenotypeValues.data());
         m_CurrentGenotypeValueIndex = 0;
-        m_Ploidy = 0;
         m_NumberLen = 0;
     }
 
@@ -443,6 +456,8 @@ private:
         }
         return m_GenotypeValues.data() + index;
     }
+
+    EParsingEvent x_ParseHeader();
 
     const char* x_ParseGT(vector<int>* int_vector);
 };
