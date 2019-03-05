@@ -113,7 +113,10 @@ public:
     CVCFScanner() {}
 
     // SetNewInputBuffer sets the next buffer to parse.
-    void SetNewInputBuffer(const char* buffer, ssize_t buffer_size);
+    void SetNewInputBuffer(const char* buffer, ssize_t buffer_size)
+    {
+        m_Tokenizer.SetNewBuffer(buffer, buffer_size);
+    }
 
     enum EParsingEvent {
         eNeedMoreData, // The parser needs a new input buffer to
@@ -186,17 +189,7 @@ public:
     }
 
     // ParseLoc parses the CHROM and the POS fields.
-    EParsingEvent ParseLoc();
-    // GetChrom returns the CHROM field parsed by ParseLoc.
-    const string& GetChrom() const
-    {
-        return m_Chrom;
-    }
-    // GetPos returns the POS field parsed by ParseLoc.
-    unsigned GetPos() const
-    {
-        return m_Pos;
-    }
+    EParsingEvent ParseLoc(string* chrom, unsigned* pos);
 
     // ParseIDs parses the ID field.
     EParsingEvent ParseIDs();
@@ -338,11 +331,6 @@ private:
         return x_HeaderError("Malformed VCF header line");
     }
 
-    EParsingEvent x_HeaderNotParsedError()
-    {
-        return x_HeaderError("VCF header not parsed");
-    }
-
     EParsingEvent x_DataLineError(const string& msg)
     {
         m_ErrorReport.m_ErrorMessage = msg;
@@ -368,8 +356,8 @@ private:
 
     unsigned m_NumberLen;
 
-    string m_Chrom;
-    unsigned m_Pos;
+    string* m_Chrom;
+    unsigned* m_Pos;
     vector<string> m_IDs;
     string m_Ref;
     vector<string> m_Alts;
@@ -458,6 +446,7 @@ private:
     }
 
     EParsingEvent x_ParseHeader();
+    EParsingEvent x_ParsePos();
 
     const char* x_ParseGT(vector<int>* int_vector);
 };

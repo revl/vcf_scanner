@@ -27,14 +27,56 @@
 
 #define NUMBER_OF_MANDATORY_COLUMNS 8
 
-void CVCFScanner::SetNewInputBuffer(const char* buffer, ssize_t buffer_size)
-{
-    m_Tokenizer.SetNewBuffer(buffer, buffer_size);
-}
-
 static const char* const s_HeaderLineColumns[NUMBER_OF_MANDATORY_COLUMNS + 2] =
         {"#CHROM", "POS", "ID", "REF", "ALT", "QUAL", "FILTER", "INFO",
                 "FORMAT", "GENOTYPE"};
+
+#define PARSE_STRING_FIELD(target_state)                                       \
+    if (!m_Tokenizer.PrepareTokenOrAccumulate(                                 \
+                m_Tokenizer.FindNewlineOrTab())) {                             \
+        return eNeedMoreData;                                                  \
+    }                                                                          \
+    if (m_Tokenizer.TokenIsLast()) {                                           \
+        return x_MissingMandatoryFieldError(                                   \
+                s_HeaderLineColumns[target_state - eChrom]);                   \
+    }
+
+#define PARSE_LIST_FIELD(target_state, container, character_set)               \
+    do {                                                                       \
+        if (!m_Tokenizer.PrepareTokenOrAccumulate(                             \
+                    m_Tokenizer.FindCharFromSet(character_set))) {             \
+            return eNeedMoreData;                                              \
+        }                                                                      \
+        if (m_Tokenizer.TokenIsLast()) {                                       \
+            return x_MissingMandatoryFieldError(                               \
+                    s_HeaderLineColumns[target_state - eChrom]);               \
+        }                                                                      \
+        if (!m_Tokenizer.TokenIsDot()) {                                       \
+            container.push_back(m_Tokenizer.GetToken());                       \
+        }                                                                      \
+    } while (m_Tokenizer.GetTokenTerm() != '\t');
+
+#define SKIP_TO_FIELD(field)                                                   \
+    if (m_ParsingState < eChrom) {                                             \
+        assert(false && "VCF header must be parsed first");                    \
+        return eError;                                                         \
+    }                                                                          \
+    do {                                                                       \
+        if (!m_Tokenizer.SkipToken(m_Tokenizer.FindNewlineOrTab())) {          \
+            return eNeedMoreData;                                              \
+        }                                                                      \
+        if (m_Tokenizer.TokenIsLast()) {                                       \
+            return x_MissingMandatoryFieldError(                               \
+                    s_HeaderLineColumns[m_ParsingState - eChrom + 1]);         \
+        }                                                                      \
+    } while (++m_ParsingState < field)
+
+#define PARSE_CHROM()                                                          \
+    PARSE_STRING_FIELD(ePos);                                                  \
+    *m_Chrom = m_Tokenizer.GetToken();                                         \
+    m_ParsingState = ePos;                                                     \
+    *m_Pos = 0;                                                                \
+    m_NumberLen = 0
 
 CVCFScanner::EParsingEvent CVCFScanner::Feed(
         const char* buffer, ssize_t buffer_size)
@@ -42,6 +84,12 @@ CVCFScanner::EParsingEvent CVCFScanner::Feed(
     m_Tokenizer.SetNewBuffer(buffer, buffer_size);
 
     switch (m_ParsingState) {
+    case eChrom:
+        PARSE_CHROM();
+        /* FALL THROUGH */
+    case ePos:
+        return x_ParsePos();
+
     case ePeekAfterEOL:
         x_ResetDataLine();
         return eOK;
@@ -49,9 +97,10 @@ CVCFScanner::EParsingEvent CVCFScanner::Feed(
     default:
         if (m_ParsingState < eChrom) {
             return x_ParseHeader();
+        } else {
+            return eError;
         }
     }
-    return eNeedMoreData;
 }
 
 CVCFScanner::EParsingEvent CVCFScanner::x_ParseHeader()
@@ -179,45 +228,34 @@ CVCFScanner::EParsingEvent CVCFScanner::x_ParseHeader()
         }
 
         x_ResetDataLine();
-
-        return eOK;
     }
 
-    return x_HeaderNotParsedError();
+    return eOK;
 }
 
-#define PARSE_STRING_FIELD(target_state)                                       \
-    if (!m_Tokenizer.PrepareTokenOrAccumulate(                                 \
-                m_Tokenizer.FindNewlineOrTab())) {                             \
-        return eNeedMoreData;                                                  \
-    }                                                                          \
-    if (m_Tokenizer.TokenIsLast()) {                                           \
-        return x_MissingMandatoryFieldError(                                   \
-                s_HeaderLineColumns[target_state - eChrom]);                   \
-    }
-
-CVCFScanner::EParsingEvent CVCFScanner::ParseLoc()
+CVCFScanner::EParsingEvent CVCFScanner::ParseLoc(string* chrom, unsigned* pos)
 {
-    if (m_ParsingState < eChrom) {
-        assert(false && "Header parsing failed");
-        return x_HeaderNotParsedError();
-    }
+    if (m_ParsingState != eChrom) {
+        if (m_ParsingState < eChrom) {
+            assert(false && "VCF header must be parsed first");
+            return eError;
+        }
 
-    if (m_ParsingState > ePos) {
         assert(false && "Must call ClearLine() before ParseLoc()");
         return eError;
     }
 
-    if (m_ParsingState == eChrom) {
-        PARSE_STRING_FIELD(ePos);
-        m_Chrom = m_Tokenizer.GetToken();
+    m_Chrom = chrom;
+    m_Pos = pos;
 
-        m_ParsingState = ePos;
-        m_Pos = 0;
-        m_NumberLen = 0;
-    }
+    PARSE_CHROM();
 
-    switch (m_Tokenizer.ParseUnsignedInt(&m_Pos, &m_NumberLen)) {
+    return x_ParsePos();
+}
+
+CVCFScanner::EParsingEvent CVCFScanner::x_ParsePos()
+{
+    switch (m_Tokenizer.ParseUnsignedInt(m_Pos, &m_NumberLen)) {
     case CVCFTokenizer::eEndOfBuffer:
         return eNeedMoreData;
     case CVCFTokenizer::eIntegerOverflow:
@@ -238,36 +276,6 @@ CVCFScanner::EParsingEvent CVCFScanner::ParseLoc()
     m_IDs.clear();
     return eOK;
 }
-
-#define PARSE_LIST_FIELD(target_state, container, character_set)               \
-    do {                                                                       \
-        if (!m_Tokenizer.PrepareTokenOrAccumulate(                             \
-                    m_Tokenizer.FindCharFromSet(character_set))) {             \
-            return eNeedMoreData;                                              \
-        }                                                                      \
-        if (m_Tokenizer.TokenIsLast()) {                                       \
-            return x_MissingMandatoryFieldError(                               \
-                    s_HeaderLineColumns[target_state - eChrom]);               \
-        }                                                                      \
-        if (!m_Tokenizer.TokenIsDot()) {                                       \
-            container.push_back(m_Tokenizer.GetToken());                       \
-        }                                                                      \
-    } while (m_Tokenizer.GetTokenTerm() != '\t');
-
-#define SKIP_TO_FIELD(field)                                                   \
-    if (m_ParsingState < eChrom) {                                             \
-        assert(false && "Header parsing failed");                              \
-        return x_HeaderNotParsedError();                                       \
-    }                                                                          \
-    do {                                                                       \
-        if (!m_Tokenizer.SkipToken(m_Tokenizer.FindNewlineOrTab())) {          \
-            return eNeedMoreData;                                              \
-        }                                                                      \
-        if (m_Tokenizer.TokenIsLast()) {                                       \
-            return x_MissingMandatoryFieldError(                               \
-                    s_HeaderLineColumns[m_ParsingState - eChrom + 1]);         \
-        }                                                                      \
-    } while (++m_ParsingState < field)
 
 CVCFScanner::EParsingEvent CVCFScanner::ParseIDs()
 {
@@ -626,14 +634,41 @@ static void s_ReadAndSetNewInputBuffer(CVCFScanner& vcf_scanner, FILE* input)
         return;                                                                \
     }
 
+static bool s_ParseToCompletion(
+        CVCFScanner::EParsingEvent pe, CVCFScanner& vcf_scanner, FILE* input)
+{
+    while (pe == CVCFScanner::eNeedMoreData) {
+        s_ReadBuffer(input);
+        pe = vcf_scanner.Feed(buffer, buffer_size);
+    }
+
+    if (pe == CVCFScanner::eError) {
+        cerr << "<-ERR@" << vcf_scanner.GetLineNumber() << ": "
+             << vcf_scanner.GetError().m_ErrorMessage << endl;
+        return false;
+    }
+
+    if (pe == CVCFScanner::eOKWithWarnings) {
+        for (const auto& warning : vcf_scanner.GetWarnings())
+            cerr << "Warning: " << warning.warning_message << endl;
+    }
+
+    return true;
+}
+
 static void ParseDataLine(CVCFScanner& vcf_scanner, FILE* input)
 {
-    CVCFScanner::EParsingEvent pe;
-
     cout << vcf_scanner.GetLineNumber() << ':';
 
-    RETRY_UNTIL_OK_OR_SKIP_LINE(ParseLoc);
-    cout << vcf_scanner.GetChrom() << '\t' << vcf_scanner.GetPos();
+    string chrom;
+    unsigned pos;
+    if (!s_ParseToCompletion(
+                vcf_scanner.ParseLoc(&chrom, &pos), vcf_scanner, input)) {
+        return;
+    }
+    cout << chrom << '\t' << pos;
+
+    CVCFScanner::EParsingEvent pe;
 
     RETRY_UNTIL_OK_OR_SKIP_LINE(ParseIDs);
     const char* sep;
