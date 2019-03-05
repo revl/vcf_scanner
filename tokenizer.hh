@@ -37,7 +37,7 @@ using namespace std;
 
 typedef string CTempString;
 
-// CVCFTokenizer tokenizes the input VCF stream.
+// CVCFTokenizer finds tokens in the input VCF stream.
 class CVCFTokenizer
 {
 public:
@@ -110,9 +110,8 @@ public:
 private:
     void x_SetTokenTermAndPossiblyIncrementLineNumber(int token_term)
     {
-        if (m_TokenTerm == '\n')
+        if ((m_TokenTerm = token_term) == '\n')
             ++m_LineNumber;
-        m_TokenTerm = token_term;
     }
 
     void x_AdvanceBy(size_t number_of_bytes)

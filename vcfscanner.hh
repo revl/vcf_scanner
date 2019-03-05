@@ -138,7 +138,7 @@ public:
                //
                // If the error happened while parsing a data line, there
                // is an option to ignore it and skip to the next line
-               // by calling Rewind().
+               // by calling ClearLine().
     };
 
     // GetLineNumber returns the current line number in the
@@ -168,17 +168,6 @@ public:
     {
         return m_Header;
     }
-
-    // Rewind determines whether end-of-file has been reached.
-    // It also positions the "reading head" of the parser at
-    // the beginning of the next data line. If the previous
-    // line was skipped due to an error or due to the lack of
-    // interest in it from the client code, this operation may
-    // require more data to be read.
-    // Rewind returns false if the parser needs more input data
-    // to detect the end-of-file condition. Supply more data by
-    // calling SetNewInputBuffer until Rewind returns true.
-    bool Rewind();
 
     // AtEOF returns true if the entire input stream has been
     // successfully parsed. The method returns false if the
@@ -280,11 +269,18 @@ public:
     // GenotypeAvailable returns true if at least one more genotype
     // field is available. The caller has an option to either use
     // this method or count the retrieved genotypes to determine
-    // when to stop parsing the current data line.
+    // when the last genotype on the current data line has been parsed.
     bool GenotypeAvailable() const
     {
         return m_Tokenizer.GetTokenTerm() == '\t';
     }
+
+    // ClearLine skips the remaining part of the current data line.
+    // This operation may require more data to be read. The client
+    // code must call this method after parsing each line even if
+    // the line has been parsed to the end, because this method also
+    // determines whether end-of-file has been reached.
+    EParsingEvent ClearLine();
 
 private:
     enum EHeaderParsingState {
@@ -292,12 +288,7 @@ private:
         eMetaInfoKey,
         eMetaInfoValue,
         eHeaderLineColumns,
-        eSampleIDs
-    } m_HeaderParsingState = eFileFormatVersion;
-
-    string m_CurrentMetaInfoKey;
-
-    enum EColumn {
+        eSampleIDs,
         eChrom,
         ePos,
         eID,
@@ -309,10 +300,11 @@ private:
         eGenotypeFormat,
         eGenotypes,
         eEndOfDataLine,
-        // FORMAT is the first optional column
-        eNumberOfMandatoryColumns = eGenotypeFormat
+        ePeekAfterEOL
     };
-    int m_DataLineParsingState = eEndOfDataLine;
+    int m_ParsingState = eFileFormatVersion;
+
+    string m_CurrentMetaInfoKey;
 
     static const char* const m_HeaderLineColumns[];
 
@@ -324,6 +316,11 @@ private:
         return eError;
     }
 
+    EParsingEvent x_HeaderNotParsedError()
+    {
+        return x_HeaderError("VCF header not parsed");
+    }
+
     EParsingEvent x_DataLineError(const string& msg)
     {
         m_ErrorReport.m_ErrorMessage = msg;
@@ -332,7 +329,7 @@ private:
 
     EParsingEvent x_MissingMandatoryFieldError(const char* field_name)
     {
-        m_DataLineParsingState = eEndOfDataLine;
+        m_ParsingState = eEndOfDataLine;
 
         string msg = "Missing mandatory VCF field \"";
         msg += field_name;
@@ -361,6 +358,12 @@ private:
     string m_Quality;
     vector<string> m_Filters;
     vector<string> m_Info;
+
+    void x_ClearDataLine()
+    {
+        m_ParsingState = eChrom;
+        m_AllelesParsed = false;
+    }
 
     // TODO Implement the INFO and FORMAT type definitions in the header.
     set<string> m_FormatKeys;
