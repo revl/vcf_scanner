@@ -28,10 +28,10 @@
 #define NUMBER_OF_MANDATORY_COLUMNS 8
 
 static const char* const s_HeaderLineColumns[NUMBER_OF_MANDATORY_COLUMNS + 2] =
-        {"#CHROM", "POS", "ID", "REF", "ALT", "QUAL", "FILTER", "INFO",
-                "FORMAT", "GENOTYPE"};
+        {"CHROM", "POS", "ID", "REF", "ALT", "QUAL", "FILTER", "INFO", "FORMAT",
+                "GENOTYPE"};
 
-#define PARSE_STRING_FIELD(target_state)                                       \
+#define PARSE_STRING(target_state)                                             \
     if (!m_Tokenizer.PrepareTokenOrAccumulate(                                 \
                 m_Tokenizer.FindNewlineOrTab())) {                             \
         return eNeedMoreData;                                                  \
@@ -39,9 +39,10 @@ static const char* const s_HeaderLineColumns[NUMBER_OF_MANDATORY_COLUMNS + 2] =
     if (m_Tokenizer.TokenIsLast()) {                                           \
         return x_MissingMandatoryFieldError(                                   \
                 s_HeaderLineColumns[target_state - eChrom]);                   \
-    }
+    }                                                                          \
+    m_ParsingState = target_state;
 
-#define PARSE_LIST_FIELD(target_state, container, character_set)               \
+#define PARSE_STRING_LIST(target_state, container, character_set)              \
     do {                                                                       \
         if (!m_Tokenizer.PrepareTokenOrAccumulate(                             \
                     m_Tokenizer.FindCharFromSet(character_set))) {             \
@@ -52,54 +53,108 @@ static const char* const s_HeaderLineColumns[NUMBER_OF_MANDATORY_COLUMNS + 2] =
                     s_HeaderLineColumns[target_state - eChrom]);               \
         }                                                                      \
         if (!m_Tokenizer.TokenIsDot()) {                                       \
-            container.push_back(m_Tokenizer.GetToken());                       \
+            if (m_NextListIndex < container.size()) {                          \
+                container.at(m_NextListIndex) = m_Tokenizer.GetToken();        \
+            } else {                                                           \
+                container.push_back(m_Tokenizer.GetToken());                   \
+            }                                                                  \
+            ++m_NextListIndex;                                                 \
         }                                                                      \
-    } while (m_Tokenizer.GetTokenTerm() != '\t');
+    } while (m_Tokenizer.GetTokenTerm() != '\t');                              \
+    container.resize(m_NextListIndex);                                         \
+    m_ParsingState = target_state;
 
-#define SKIP_TO_FIELD(field)                                                   \
+#define SKIP_TO_STATE(target_state)                                            \
     if (m_ParsingState < eChrom) {                                             \
         assert(false && "VCF header must be parsed first");                    \
         return eError;                                                         \
     }                                                                          \
-    do {                                                                       \
+    if (m_ParsingState > target_state) {                                       \
+        assert(false && "ClearLine must call be called first");                \
+        return eError;                                                         \
+    }                                                                          \
+    while (m_ParsingState < target_state) {                                    \
         if (!m_Tokenizer.SkipToken(m_Tokenizer.FindNewlineOrTab())) {          \
+            m_FieldsToSkip = target_state - m_ParsingState;                    \
+            m_ParsingState = target_state;                                     \
             return eNeedMoreData;                                              \
         }                                                                      \
         if (m_Tokenizer.TokenIsLast()) {                                       \
             return x_MissingMandatoryFieldError(                               \
                     s_HeaderLineColumns[m_ParsingState - eChrom + 1]);         \
         }                                                                      \
-    } while (++m_ParsingState < field)
+        ++m_ParsingState;                                                      \
+    }
 
 #define PARSE_CHROM()                                                          \
-    PARSE_STRING_FIELD(ePos);                                                  \
-    *m_Chrom = m_Tokenizer.GetToken();                                         \
-    m_ParsingState = ePos;                                                     \
-    *m_Pos = 0;                                                                \
-    m_NumberLen = 0
+    PARSE_STRING(ePos);                                                        \
+    m_Chrom = m_Tokenizer.GetToken();
+
+#define PARSE_REF()                                                            \
+    PARSE_STRING(eAlt);                                                        \
+    m_Ref = m_Tokenizer.GetToken();
 
 CVCFScanner::EParsingEvent CVCFScanner::Feed(
         const char* buffer, ssize_t buffer_size)
 {
     m_Tokenizer.SetNewBuffer(buffer, buffer_size);
 
-    switch (m_ParsingState) {
-    case eChrom:
-        PARSE_CHROM();
-        /* FALL THROUGH */
-    case ePos:
-        return x_ParsePos();
+    if (m_ParsingState == eGenotypes) {
+        return x_ParseGenotype();
+    }
 
+    if (m_ParsingState <= ePos) {
+        if (m_ParsingState < eChrom) {
+            return x_ParseHeader();
+        }
+        if (m_ParsingState == eChrom) {
+            PARSE_CHROM();
+        }
+        return x_ParsePos();
+    } else {
+        while (m_FieldsToSkip > 0) {
+            if (!m_Tokenizer.SkipToken(m_Tokenizer.FindNewlineOrTab())) {
+                return eNeedMoreData;
+            }
+            if (m_Tokenizer.TokenIsLast()) {
+                return x_MissingMandatoryFieldError(
+                        s_HeaderLineColumns[m_ParsingState - eChrom + 1]);
+            }
+            ++m_ParsingState;
+            --m_FieldsToSkip;
+        }
+    }
+
+    switch (m_ParsingState) {
+    case eID:
+        return x_ParseIDs();
+    case eRef:
+        PARSE_REF();
+        /* FALL THROUGH */
+    case eAlt:
+        return x_ParseAlts();
+    case eQuality:
+        return x_ParseQuality();
+    case eFilter:
+        return x_ParseFilters();
+    case eInfoField:
+        return x_ParseInfo();
+    case eGenotypeFormat:
+        return x_ParseGenotypeFormat();
+    case eClearLine:
+        if (!m_Tokenizer.SkipToken(m_Tokenizer.FindNewline())) {
+            return eNeedMoreData;
+        }
+        if (m_Tokenizer.BufferIsEmpty() && !m_Tokenizer.AtEOF()) {
+            m_ParsingState = ePeekAfterEOL;
+            return eNeedMoreData;
+        }
+        /* FALL THROUGH */
     case ePeekAfterEOL:
         x_ResetDataLine();
         return eOK;
-
     default:
-        if (m_ParsingState < eChrom) {
-            return x_ParseHeader();
-        } else {
-            return eError;
-        }
+        return eError;
     }
 }
 
@@ -134,7 +189,7 @@ CVCFScanner::EParsingEvent CVCFScanner::x_ParseHeader()
 
         switch (m_Tokenizer.GetTokenTerm()) {
         case '\t':
-            if (m_Tokenizer.GetToken() != s_HeaderLineColumns[0]) {
+            if (m_Tokenizer.GetToken().substr(1) != s_HeaderLineColumns[0]) {
                 return x_InvalidMetaInfoLineError();
             }
             m_HeaderLineColumnOK = 1;
@@ -233,7 +288,7 @@ CVCFScanner::EParsingEvent CVCFScanner::x_ParseHeader()
     return eOK;
 }
 
-CVCFScanner::EParsingEvent CVCFScanner::ParseLoc(string* chrom, unsigned* pos)
+CVCFScanner::EParsingEvent CVCFScanner::ParseLoc()
 {
     if (m_ParsingState != eChrom) {
         if (m_ParsingState < eChrom) {
@@ -245,8 +300,8 @@ CVCFScanner::EParsingEvent CVCFScanner::ParseLoc(string* chrom, unsigned* pos)
         return eError;
     }
 
-    m_Chrom = chrom;
-    m_Pos = pos;
+    m_Pos = 0;
+    m_NumberLen = 0;
 
     PARSE_CHROM();
 
@@ -255,7 +310,7 @@ CVCFScanner::EParsingEvent CVCFScanner::ParseLoc(string* chrom, unsigned* pos)
 
 CVCFScanner::EParsingEvent CVCFScanner::x_ParsePos()
 {
-    switch (m_Tokenizer.ParseUnsignedInt(m_Pos, &m_NumberLen)) {
+    switch (m_Tokenizer.ParseUnsignedInt(&m_Pos, &m_NumberLen)) {
     case CVCFTokenizer::eEndOfBuffer:
         return eNeedMoreData;
     case CVCFTokenizer::eIntegerOverflow:
@@ -273,110 +328,90 @@ CVCFScanner::EParsingEvent CVCFScanner::x_ParsePos()
     }
 
     m_ParsingState = eID;
-    m_IDs.clear();
     return eOK;
 }
 
 CVCFScanner::EParsingEvent CVCFScanner::ParseIDs()
 {
-    if (m_ParsingState > eID) {
-        assert(false && "Must call ClearLine() before ParseIDs()");
-        return eError;
-    }
+    m_NextListIndex = 0;
 
-    if (m_ParsingState < eID) {
-        SKIP_TO_FIELD(eID);
-        m_IDs.clear();
-    }
+    SKIP_TO_STATE(eID);
 
-    PARSE_LIST_FIELD(eRef, m_IDs, m_Tokenizer.m_NewlineOrTabOrSemicolon);
+    return x_ParseIDs();
+}
 
-    m_ParsingState = eRef;
+CVCFScanner::EParsingEvent CVCFScanner::x_ParseIDs()
+{
+    PARSE_STRING_LIST(eRef, m_IDs, m_Tokenizer.m_NewlineOrTabOrSemicolon);
     return eOK;
 }
 
 CVCFScanner::EParsingEvent CVCFScanner::ParseAlleles()
 {
-    if (m_ParsingState > eAlt) {
-        assert(false && "Must call ClearLine() before ParseAlleles()");
-        return eError;
-    }
+    m_NextListIndex = 0;
 
-    if (m_ParsingState < eRef) {
-        SKIP_TO_FIELD(eRef);
-    }
+    SKIP_TO_STATE(eRef);
 
-    if (m_ParsingState == eRef) {
-        PARSE_STRING_FIELD(eAlt);
-        m_Ref = m_Tokenizer.GetToken();
+    PARSE_REF();
 
-        m_ParsingState = eAlt;
-        m_Alts.clear();
-    }
+    return x_ParseAlts();
+}
 
-    PARSE_LIST_FIELD(eQuality, m_Alts, m_Tokenizer.m_NewlineOrTabOrComma);
+CVCFScanner::EParsingEvent CVCFScanner::x_ParseAlts()
+{
+    PARSE_STRING_LIST(eQuality, m_Alts, m_Tokenizer.m_NewlineOrTabOrComma);
 
     m_AllelesParsed = true;
 
-    m_ParsingState = eQuality;
     return eOK;
 }
 
 CVCFScanner::EParsingEvent CVCFScanner::ParseQuality()
 {
-    if (m_ParsingState > eQuality) {
-        assert(false && "Must call ClearLine() before ParseQuality()");
-        return eError;
-    }
+    SKIP_TO_STATE(eQuality);
 
-    if (m_ParsingState < eQuality) {
-        SKIP_TO_FIELD(eQuality);
-    }
+    return x_ParseQuality();
+}
 
-    PARSE_STRING_FIELD(eFilter);
+CVCFScanner::EParsingEvent CVCFScanner::x_ParseQuality()
+{
+    PARSE_STRING(eFilter);
     if (!m_Tokenizer.TokenIsDot())
         m_Quality = m_Tokenizer.GetToken();
     else
         m_Quality.clear();
-
-    m_ParsingState = eFilter;
-    m_Filters.clear();
 
     return eOK;
 }
 
 CVCFScanner::EParsingEvent CVCFScanner::ParseFilters()
 {
-    if (m_ParsingState > eFilter) {
-        assert(false && "Must call ClearLine() before ParseFilters()");
-        return eError;
-    }
+    m_NextListIndex = 0;
 
-    if (m_ParsingState < eFilter) {
-        SKIP_TO_FIELD(eFilter);
-        m_Filters.clear();
-    }
+    SKIP_TO_STATE(eFilter);
 
-    PARSE_LIST_FIELD(
+    return x_ParseFilters();
+}
+
+CVCFScanner::EParsingEvent CVCFScanner::x_ParseFilters()
+{
+    PARSE_STRING_LIST(
             eInfoField, m_Filters, m_Tokenizer.m_NewlineOrTabOrSemicolon);
 
-    m_ParsingState = eInfoField;
-    m_Info.clear();
     return eOK;
 }
 
 CVCFScanner::EParsingEvent CVCFScanner::ParseInfo()
 {
-    if (m_ParsingState > eInfoField) {
-        assert(false && "Must call ClearLine() before ParseInfo()");
-        return eError;
-    }
+    m_Info.clear();
 
-    if (m_ParsingState < eInfoField) {
-        SKIP_TO_FIELD(eInfoField);
-        m_Info.clear();
-    }
+    SKIP_TO_STATE(eInfoField);
 
+    return x_ParseInfo();
+}
+
+CVCFScanner::EParsingEvent CVCFScanner::x_ParseInfo()
+{
     do {
         if (!m_Tokenizer.PrepareTokenOrAccumulate(m_Tokenizer.FindCharFromSet(
                     m_Tokenizer.m_NewlineOrTabOrSemicolon))) {
@@ -392,22 +427,21 @@ CVCFScanner::EParsingEvent CVCFScanner::ParseInfo()
     } while (m_Tokenizer.GetTokenTerm() != '\t');
 
     m_ParsingState = eGenotypeFormat;
-    m_GenotypeKeyPositions.Clear();
+
     return eOK;
 }
 
 CVCFScanner::EParsingEvent CVCFScanner::ParseGenotypeFormat()
 {
-    if (m_ParsingState > eGenotypeFormat) {
-        assert(false && "Must call ClearLine() before ParseGenotypeFormat()");
-        return eError;
-    }
+    m_GenotypeKeyPositions.Clear();
 
-    if (m_ParsingState < eGenotypeFormat) {
-        SKIP_TO_FIELD(eGenotypeFormat);
-        m_GenotypeKeyPositions.Clear();
-    }
+    SKIP_TO_STATE(eGenotypeFormat);
 
+    return x_ParseGenotypeFormat();
+}
+
+CVCFScanner::EParsingEvent CVCFScanner::x_ParseGenotypeFormat()
+{
     do {
         if (!m_Tokenizer.PrepareTokenOrAccumulate(m_Tokenizer.FindCharFromSet(
                     m_Tokenizer.m_NewlineOrTabOrColon))) {
@@ -433,12 +467,12 @@ CVCFScanner::EParsingEvent CVCFScanner::ParseGenotypeFormat()
                     ++m_GenotypeKeyPositions.number_of_positions;
     } while (m_Tokenizer.GetTokenTerm() != '\t');
 
-    m_ParsingState = eGenotypes;
     x_ClearGenotypeValues();
+    m_ParsingState = eGenotypes;
     return eOK;
 }
 
-bool CVCFScanner::CaptureGT(vector<int>* alleles)
+bool CVCFScanner::CaptureGT()
 {
     unsigned gt_index = m_GenotypeKeyPositions.GT;
     if (gt_index == 0) {
@@ -447,14 +481,13 @@ bool CVCFScanner::CaptureGT(vector<int>* alleles)
     --gt_index;
     auto gt_value = x_AllocGenotypeValue(gt_index);
     gt_value->data_type = eGT;
-    gt_value->int_vector = alleles;
-    alleles->clear();
+    gt_value->int_vector = &m_GT;
     return true;
 }
 
-const char* CVCFScanner::x_ParseGT(vector<int>* int_vector)
+const char* CVCFScanner::x_ParseGT()
 {
-    int_vector->clear();
+    m_GT.clear();
 
     const string& token = m_Tokenizer.GetToken();
 
@@ -469,7 +502,7 @@ const char* CVCFScanner::x_ParseGT(vector<int>* int_vector)
 
     for (;; ++ptr, --len) {
         if (*ptr == '.') {
-            int_vector->push_back(-1);
+            m_GT.push_back(-1);
             ++ptr;
             --len;
         } else {
@@ -488,7 +521,7 @@ const char* CVCFScanner::x_ParseGT(vector<int>* int_vector)
                 allele = allele * 10 + digit;
             }
 
-            int_vector->push_back((int) allele);
+            m_GT.push_back((int) allele);
 
             if (m_AllelesParsed && allele > m_Alts.size()) {
                 return "Allele index exceeds the number of alleles";
@@ -514,16 +547,22 @@ CVCFScanner::EParsingEvent CVCFScanner::ParseGenotype()
 {
     if (m_ParsingState != eGenotypes) {
         assert(false &&
-                "Must call ParseGenotypeFormat() before ParseGenotype()");
+                "ParseGenotypeFormat must be called before ParseGenotype");
         return eError;
     }
 
-    if (m_CurrentGenotypeValueIndex >=
-            m_GenotypeKeyPositions.number_of_positions) {
+    if (m_CurrentGenotypeFieldIndex >= m_Header.m_SampleIDs.size()) {
         return x_DataLineError(
                 "The number of genotype fields exceeds the number of samples");
     }
 
+    m_CurrentGenotypeValueIndex = 0;
+
+    return x_ParseGenotype();
+}
+
+CVCFScanner::EParsingEvent CVCFScanner::x_ParseGenotype()
+{
     SGenotypeValue* value =
             m_GenotypeValues.data() + m_CurrentGenotypeValueIndex;
 
@@ -555,7 +594,7 @@ CVCFScanner::EParsingEvent CVCFScanner::ParseGenotype()
             // TODO case eCharacter:
             // TODO case eString:
             case eGT:
-                error_message = x_ParseGT(value->int_vector);
+                error_message = x_ParseGT();
                 if (error_message != nullptr) {
                     return x_DataLineError(error_message);
                 }
@@ -568,7 +607,9 @@ CVCFScanner::EParsingEvent CVCFScanner::ParseGenotype()
                 return eOK;
             }
         }
+
         if (m_Tokenizer.GetTokenTerm() == '\t') {
+            ++m_CurrentGenotypeFieldIndex;
             return eOK;
         }
 
@@ -588,6 +629,7 @@ CVCFScanner::EParsingEvent CVCFScanner::ClearLine()
     if (m_ParsingState != ePeekAfterEOL) {
         if (m_ParsingState != eEndOfDataLine &&
                 !m_Tokenizer.SkipToken(m_Tokenizer.FindNewline())) {
+            m_ParsingState = eClearLine;
             return eNeedMoreData;
         }
 
@@ -610,30 +652,6 @@ static void s_ReadBuffer(FILE* input)
     buffer_size = fread(buffer, 1, sizeof(buffer), input);
 }
 
-static void s_ReadAndSetNewInputBuffer(CVCFScanner& vcf_scanner, FILE* input)
-{
-    vcf_scanner.SetNewInputBuffer(
-            buffer, fread(buffer, 1, sizeof(buffer), input));
-}
-
-#define RETRY_UNTIL_OK_OR_ERROR(method)                                        \
-    while ((pe = vcf_scanner.method()) == CVCFScanner::eNeedMoreData) {        \
-        s_ReadAndSetNewInputBuffer(vcf_scanner, input);                        \
-    }                                                                          \
-    if (pe == CVCFScanner::eOKWithWarnings) {                                  \
-        for (const auto& warning : vcf_scanner.GetWarnings())                  \
-            cerr << "Warning: " << warning.warning_message << endl;            \
-        pe = CVCFScanner::eOK;                                                 \
-    }
-
-#define RETRY_UNTIL_OK_OR_SKIP_LINE(method)                                    \
-    RETRY_UNTIL_OK_OR_ERROR(method);                                           \
-    if (pe == CVCFScanner::eError) {                                           \
-        cerr << "<-ERR@" << vcf_scanner.GetLineNumber() << ": "                \
-             << vcf_scanner.GetError().m_ErrorMessage << endl;                 \
-        return;                                                                \
-    }
-
 static bool s_ParseToCompletion(
         CVCFScanner::EParsingEvent pe, CVCFScanner& vcf_scanner, FILE* input)
 {
@@ -643,8 +661,6 @@ static bool s_ParseToCompletion(
     }
 
     if (pe == CVCFScanner::eError) {
-        cerr << "<-ERR@" << vcf_scanner.GetLineNumber() << ": "
-             << vcf_scanner.GetError().m_ErrorMessage << endl;
         return false;
     }
 
@@ -656,21 +672,19 @@ static bool s_ParseToCompletion(
     return true;
 }
 
-static void ParseDataLine(CVCFScanner& vcf_scanner, FILE* input)
+static bool ParseDataLine(CVCFScanner& vcf_scanner, FILE* input)
 {
     cout << vcf_scanner.GetLineNumber() << ':';
 
-    string chrom;
-    unsigned pos;
-    if (!s_ParseToCompletion(
-                vcf_scanner.ParseLoc(&chrom, &pos), vcf_scanner, input)) {
-        return;
+    if (!s_ParseToCompletion(vcf_scanner.ParseLoc(), vcf_scanner, input)) {
+        return false;
     }
-    cout << chrom << '\t' << pos;
+    cout << vcf_scanner.GetChrom() << '\t' << vcf_scanner.GetPos();
 
-    CVCFScanner::EParsingEvent pe;
-
-    RETRY_UNTIL_OK_OR_SKIP_LINE(ParseIDs);
+    vector<string> ids;
+    if (!s_ParseToCompletion(vcf_scanner.ParseIDs(), vcf_scanner, input)) {
+        return false;
+    }
     const char* sep;
     if (!vcf_scanner.GetIDs().empty()) {
         sep = "\t";
@@ -682,7 +696,9 @@ static void ParseDataLine(CVCFScanner& vcf_scanner, FILE* input)
     } else
         cout << "\t.\t";
 
-    RETRY_UNTIL_OK_OR_SKIP_LINE(ParseAlleles);
+    if (!s_ParseToCompletion(vcf_scanner.ParseAlleles(), vcf_scanner, input)) {
+        return false;
+    }
     cout << vcf_scanner.GetRef();
     if (!vcf_scanner.GetAlts().empty()) {
         sep = "\t";
@@ -694,14 +710,18 @@ static void ParseDataLine(CVCFScanner& vcf_scanner, FILE* input)
     } else
         cout << "\t.\t";
 
-    RETRY_UNTIL_OK_OR_SKIP_LINE(ParseQuality);
+    if (!s_ParseToCompletion(vcf_scanner.ParseQuality(), vcf_scanner, input)) {
+        return false;
+    }
     string quality = vcf_scanner.GetQuality();
     if (!quality.empty())
         cout << quality;
     else
         cout << ".";
 
-    RETRY_UNTIL_OK_OR_SKIP_LINE(ParseFilters);
+    if (!s_ParseToCompletion(vcf_scanner.ParseFilters(), vcf_scanner, input)) {
+        return false;
+    }
     if (!vcf_scanner.GetFilters().empty()) {
         sep = "\t";
         for (const auto& filter : vcf_scanner.GetFilters()) {
@@ -711,7 +731,9 @@ static void ParseDataLine(CVCFScanner& vcf_scanner, FILE* input)
     } else
         cout << "\t.";
 
-    RETRY_UNTIL_OK_OR_SKIP_LINE(ParseInfo);
+    if (!s_ParseToCompletion(vcf_scanner.ParseInfo(), vcf_scanner, input)) {
+        return false;
+    }
     if (!vcf_scanner.GetInfo().empty()) {
         sep = "\t";
         for (const auto& info_item : vcf_scanner.GetInfo()) {
@@ -722,26 +744,34 @@ static void ParseDataLine(CVCFScanner& vcf_scanner, FILE* input)
     } else
         cout << "\t.\t";
 
-    RETRY_UNTIL_OK_OR_SKIP_LINE(ParseGenotypeFormat);
-    cout << "GT";
-
-    vector<int> alleles;
-
-    if (!vcf_scanner.CaptureGT(&alleles)) {
-        cout << "\tERR: no GT key" << endl;
-        return;
+    if (!s_ParseToCompletion(
+                vcf_scanner.ParseGenotypeFormat(), vcf_scanner, input)) {
+        return false;
     }
 
+    if (!vcf_scanner.CaptureGT()) {
+        cout << endl;
+        cout << "\tERR: no GT key" << endl;
+        return true;
+    }
+
+    cout << "GT";
+
     while (vcf_scanner.GenotypeAvailable()) {
-        RETRY_UNTIL_OK_OR_SKIP_LINE(ParseGenotype);
+        if (!s_ParseToCompletion(
+                    vcf_scanner.ParseGenotype(), vcf_scanner, input)) {
+            return false;
+        }
         sep = "\t";
-        for (auto allele : alleles) {
+        for (auto allele : vcf_scanner.GetGT()) {
             cout << sep << allele;
             sep = vcf_scanner.IsPhasedGT() ? "|" : "/";
         }
     }
 
     cout << endl;
+
+    return true;
 }
 
 int main(int argc, const char* argv[])
@@ -793,10 +823,13 @@ int main(int argc, const char* argv[])
     cout << endl;
 
     while (!vcf_scanner.AtEOF()) {
-        ParseDataLine(vcf_scanner, input);
+        if (!ParseDataLine(vcf_scanner, input)) {
+            cout << endl;
+            cerr << "<-ERR@" << vcf_scanner.GetLineNumber() << ": "
+                 << vcf_scanner.GetError().m_ErrorMessage << endl;
+        }
 
-        while (vcf_scanner.ClearLine() == CVCFScanner::eNeedMoreData)
-            s_ReadAndSetNewInputBuffer(vcf_scanner, input);
+        s_ParseToCompletion(vcf_scanner.ClearLine(), vcf_scanner, input);
     }
 
     return 0;

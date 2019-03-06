@@ -104,19 +104,12 @@ struct CVCFWarning {
 //
 // Before parsing begins, or when a parsing function returns eNeedMoreData,
 // a new buffer with input data must be supplied to the parser by calling
-// SetNewInputBuffer(). The buffer must not be freed or overwritten until
-// eNeedMoreData is received again or the client code chooses not to continue
-// parsing.
+// Feed(). The buffer must not be freed or overwritten until eNeedMoreData
+// is received again or the client code chooses not to continue parsing.
 class CVCFScanner
 {
 public:
     CVCFScanner() {}
-
-    // SetNewInputBuffer sets the next buffer to parse.
-    void SetNewInputBuffer(const char* buffer, ssize_t buffer_size)
-    {
-        m_Tokenizer.SetNewBuffer(buffer, buffer_size);
-    }
 
     enum EParsingEvent {
         eNeedMoreData, // The parser needs a new input buffer to
@@ -189,11 +182,21 @@ public:
     }
 
     // ParseLoc parses the CHROM and the POS fields.
-    EParsingEvent ParseLoc(string* chrom, unsigned* pos);
+    EParsingEvent ParseLoc();
+    // GetChrom returns the CHROM field parsed by ParseLoc.
+    const string& GetChrom() const
+    {
+        return m_Chrom;
+    }
+    // GetPos returns the POS field parsed by ParseLoc.
+    unsigned GetPos() const
+    {
+        return m_Pos;
+    }
 
     // ParseIDs parses the ID field.
     EParsingEvent ParseIDs();
-    // GetID returns the IDs parsed by ParsePos.
+    // GetID returns the IDs parsed by ParseIDs.
     const vector<string>& GetIDs() const
     {
         return m_IDs;
@@ -245,13 +248,10 @@ public:
     // ParseGenotypeFormat.
     // TODO const TGenotypeFormat& GetGenotypeFormat() const;
 
-    // CaptureGT binds or re-binds a client-side variable to receive
-    // GT values as they are parsed by the ParseGenotype method below.
-    // Use the IsPhasedGT method to check whether the sample was phased.
+    // CaptureGT enables parsing of GT values in the ParseGenotype method.
     // CaptureGT returns false and does nothing if the GT key was not
     // specified in the FORMAT field.
-    // Set alleles to NULL to stop receiving the GT values.
-    bool CaptureGT(vector<int>* alleles);
+    bool CaptureGT();
 
     // TODO bool CaptureString(const char* key, string* value);
     // TODO bool CaptureStrings(const char* key, vector<string>* values);
@@ -261,6 +261,12 @@ public:
     // ParseGenotype sequentially parses genotype fields.
     EParsingEvent ParseGenotype();
 
+    // GetGT returns the GT values parsed by ParseGenotype in
+    // its previous iteration.
+    const vector<int>& GetGT() const
+    {
+        return m_GT;
+    }
     // IsPhasedGT returns true if the parsed sample was phased.
     bool IsPhasedGT() const
     {
@@ -301,9 +307,12 @@ private:
         eGenotypeFormat,
         eGenotypes,
         eEndOfDataLine,
+        eClearLine,
         ePeekAfterEOL
     };
     int m_ParsingState = eFileFormatVersion;
+
+    int m_FieldsToSkip = 0;
 
     string m_CurrentMetaInfoKey;
 
@@ -355,9 +364,10 @@ private:
     CVCFHeader m_Header;
 
     unsigned m_NumberLen;
+    size_t m_NextListIndex;
 
-    string* m_Chrom;
-    unsigned* m_Pos;
+    string m_Chrom;
+    unsigned m_Pos;
     vector<string> m_IDs;
     string m_Ref;
     vector<string> m_Alts;
@@ -420,8 +430,12 @@ private:
         };
     };
 
+    unsigned m_CurrentGenotypeFieldIndex;
+
     vector<SGenotypeValue> m_GenotypeValues;
     unsigned m_CurrentGenotypeValueIndex;
+
+    vector<int> m_GT;
     bool m_PhasedGT;
 
     void x_ClearGenotypeValues()
@@ -429,7 +443,7 @@ private:
         memset(m_GenotypeValues.data(), 0,
                 (char*) &*m_GenotypeValues.end() -
                         (char*) m_GenotypeValues.data());
-        m_CurrentGenotypeValueIndex = 0;
+        m_CurrentGenotypeFieldIndex = 0;
         m_NumberLen = 0;
     }
 
@@ -447,6 +461,13 @@ private:
 
     EParsingEvent x_ParseHeader();
     EParsingEvent x_ParsePos();
+    EParsingEvent x_ParseIDs();
+    EParsingEvent x_ParseAlts();
+    EParsingEvent x_ParseQuality();
+    EParsingEvent x_ParseFilters();
+    EParsingEvent x_ParseInfo();
+    EParsingEvent x_ParseGenotypeFormat();
+    EParsingEvent x_ParseGenotype();
 
-    const char* x_ParseGT(vector<int>* int_vector);
+    const char* x_ParseGT();
 };
