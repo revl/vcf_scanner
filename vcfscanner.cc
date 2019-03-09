@@ -187,17 +187,16 @@ CVCFScanner::EParsingEvent CVCFScanner::x_ParseHeader()
             return eNeedMoreData;
         }
 
-        switch (m_Tokenizer.GetTokenTerm()) {
-        case '\t':
+        if (m_Tokenizer.TokenIsLast()) {
+            return x_InvalidMetaInfoLineError();
+        }
+
+        if (m_Tokenizer.GetTokenTerm() == '\t') {
             if (m_Tokenizer.GetToken().substr(1) != s_HeaderLineColumns[0]) {
                 return x_InvalidMetaInfoLineError();
             }
             m_HeaderLineColumnOK = 1;
-            goto ParseHeaderColumns;
-        case '\n':
-            return x_InvalidMetaInfoLineError();
-        case EOF:
-            return x_UnexpectedEOFInHeader();
+            goto ParseHeaderLine;
         }
 
         // Found an equals sign - save the key and proceed
@@ -219,7 +218,8 @@ CVCFScanner::EParsingEvent CVCFScanner::x_ParseHeader()
         }
 
         if (m_Tokenizer.GetTokenTerm() == EOF) {
-            return x_UnexpectedEOFInHeader();
+            return x_HeaderError(
+                    "Unexpected end of file while parsing VCF file header");
         }
 
         m_Header.m_MetaInfo[m_CurrentMetaInfoKey].push_back(
@@ -228,7 +228,7 @@ CVCFScanner::EParsingEvent CVCFScanner::x_ParseHeader()
         // Go back to parsing the next key.
         goto ParseMetaInfoKey;
 
-    ParseHeaderColumns:
+    ParseHeaderLine:
         m_ParsingState = eHeaderLineColumns;
         /* FALL THROUGH */
 
@@ -255,7 +255,7 @@ CVCFScanner::EParsingEvent CVCFScanner::x_ParseHeader()
                     // but there are no samples.
                     m_Header.m_GenotypeInfoPresent = true;
                 }
-                break;
+                goto EndOfHeaderLine;
             }
 
             // The current token ends with a tab.
@@ -277,6 +277,7 @@ CVCFScanner::EParsingEvent CVCFScanner::x_ParseHeader()
         } while (m_Tokenizer.GetTokenTerm() == '\t');
     }
 
+EndOfHeaderLine:
     if (m_Tokenizer.BufferIsEmpty() && !m_Tokenizer.AtEOF()) {
         m_ParsingState = ePeekAfterEOL;
         return eNeedMoreData;
