@@ -18,3 +18,7 @@
 * Test the situation when there are no data lines at all and the header
   ends with: 1) EOL and 2) EOF
 * Add a feature to skip genotypes that are not needed
+* Allow asterisks in ALTs
+* Search for TODO items in the source code.
+* Get rid of macros in the implementation to increase test coverage
+* Test line skipping
