@@ -246,18 +246,17 @@ CVCFScanner::EParsingEvent CVCFScanner::x_ParseHeader()
 
             ++m_HeaderLineColumnOK;
 
-            if (m_Tokenizer.TokenIsLast())
-                switch (m_HeaderLineColumnOK) {
-                case NUMBER_OF_MANDATORY_COLUMNS + 1:
+            if (m_Tokenizer.TokenIsLast()) {
+                if (m_HeaderLineColumnOK < NUMBER_OF_MANDATORY_COLUMNS) {
+                    return x_InvalidHeaderLineError();
+                }
+                if (m_HeaderLineColumnOK > NUMBER_OF_MANDATORY_COLUMNS) {
                     // The FORMAT field is present,
                     // but there are no samples.
                     m_Header.m_GenotypeInfoPresent = true;
-                    /* FALL THROUGH */
-                case NUMBER_OF_MANDATORY_COLUMNS:
-                    return eOK;
-                default:
-                    return x_InvalidHeaderLineError();
                 }
+                break;
+            }
 
             // The current token ends with a tab.
             // Parse the next header line column.
@@ -276,14 +275,14 @@ CVCFScanner::EParsingEvent CVCFScanner::x_ParseHeader()
 
             m_Header.m_SampleIDs.push_back(m_Tokenizer.GetToken());
         } while (m_Tokenizer.GetTokenTerm() == '\t');
-
-        if (m_Tokenizer.BufferIsEmpty() && !m_Tokenizer.AtEOF()) {
-            m_ParsingState = ePeekAfterEOL;
-            return eNeedMoreData;
-        }
-
-        x_ResetDataLine();
     }
+
+    if (m_Tokenizer.BufferIsEmpty() && !m_Tokenizer.AtEOF()) {
+        m_ParsingState = ePeekAfterEOL;
+        return eNeedMoreData;
+    }
+
+    x_ResetDataLine();
 
     return eOK;
 }
