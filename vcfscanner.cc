@@ -86,6 +86,35 @@ static const char* const s_HeaderLineColumns[NUMBER_OF_MANDATORY_COLUMNS + 2] =
         ++m_ParsingState;                                                      \
     }
 
+CVCFScanner::EParsingEvent CVCFScanner::x_SkipToState(
+        CVCFScanner::EParsingState target_state)
+{
+    // LCOV_EXCL_START
+    if (m_ParsingState < eChrom) {
+        assert(false && "VCF header must be parsed first");
+        return eError;
+    }
+    if (m_ParsingState > target_state) {
+        assert(false && "ClearLine must call be called first");
+        return eError;
+    }
+    // LCOV_EXCL_STOP
+
+    while (m_ParsingState < target_state) {
+        if (!m_Tokenizer.SkipToken(m_Tokenizer.FindNewlineOrTab())) {
+            m_FieldsToSkip = target_state - m_ParsingState;
+            m_ParsingState = target_state;
+            return eNeedMoreData;
+        }
+        if (m_Tokenizer.TokenIsLast()) {
+            return x_MissingMandatoryFieldError(
+                    s_HeaderLineColumns[m_ParsingState - eChrom + 1]);
+        }
+        ++m_ParsingState;
+    }
+    return eOK;
+}
+
 #define PARSE_CHROM()                                                          \
     PARSE_STRING(ePos);                                                        \
     m_Chrom = m_Tokenizer.GetToken();
@@ -291,8 +320,8 @@ EndOfHeaderLine:
 
 CVCFScanner::EParsingEvent CVCFScanner::ParseLoc()
 {
+    // LCOV_EXCL_START
     if (m_ParsingState != eChrom) {
-        // LCOV_EXCL_START
         if (m_ParsingState < eChrom) {
             assert(false && "VCF header must be parsed first");
             return eError;
@@ -300,8 +329,8 @@ CVCFScanner::EParsingEvent CVCFScanner::ParseLoc()
 
         assert(false && "Must call ClearLine() before ParseLoc()");
         return eError;
-        // LCOV_EXCL_STOP
     }
+    // LCOV_EXCL_STOP
 
     m_Pos = 0;
     m_NumberLen = 0;
@@ -391,7 +420,10 @@ CVCFScanner::EParsingEvent CVCFScanner::ParseFilters()
 {
     m_NextListIndex = 0;
 
-    SKIP_TO_STATE(eFilter);
+    EParsingEvent pe = x_SkipToState(eFilter);
+    if (pe != eOK) {
+        return pe;
+    }
 
     return x_ParseFilters();
 }
@@ -548,13 +580,13 @@ const char* CVCFScanner::x_ParseGT()
 
 CVCFScanner::EParsingEvent CVCFScanner::ParseGenotype()
 {
+    // LCOV_EXCL_START
     if (m_ParsingState != eGenotypes) {
-        // LCOV_EXCL_START
         assert(false &&
                 "ParseGenotypeFormat must be called before ParseGenotype");
         return eError;
-        // LCOV_EXCL_STOP
     }
+    // LCOV_EXCL_STOP
 
     if (m_CurrentGenotypeFieldIndex >= m_Header.m_SampleIDs.size()) {
         return x_DataLineError(
@@ -627,20 +659,18 @@ CVCFScanner::EParsingEvent CVCFScanner::x_ParseGenotype()
 
 CVCFScanner::EParsingEvent CVCFScanner::ClearLine()
 {
-    if (m_Tokenizer.AtEOF()) {
-        return eOK;
-    }
+    if (!m_Tokenizer.AtEOF()) {
+        if (m_ParsingState != ePeekAfterEOL) {
+            if (m_ParsingState != eEndOfDataLine &&
+                    !m_Tokenizer.SkipToken(m_Tokenizer.FindNewline())) {
+                m_ParsingState = eClearLine;
+                return eNeedMoreData;
+            }
 
-    if (m_ParsingState != ePeekAfterEOL) {
-        if (m_ParsingState != eEndOfDataLine &&
-                !m_Tokenizer.SkipToken(m_Tokenizer.FindNewline())) {
-            m_ParsingState = eClearLine;
-            return eNeedMoreData;
-        }
-
-        if (m_Tokenizer.BufferIsEmpty()) {
-            m_ParsingState = ePeekAfterEOL;
-            return eNeedMoreData;
+            if (m_Tokenizer.BufferIsEmpty()) {
+                m_ParsingState = ePeekAfterEOL;
+                return eNeedMoreData;
+            }
         }
     }
 
@@ -782,7 +812,7 @@ static bool ParseDataLine(CVCFScanner& vcf_scanner, FILE* input)
     return true;
 }
 
-int main(int argc, const char* argv[])
+int mainer(int argc, const char* argv[])
 {
     if (argc != 2) {
         fprintf(stderr, "Usage %s VCF_FILE\n", *argv);
