@@ -112,7 +112,7 @@ CVCFScanner::EParsingEvent CVCFScanner::Feed(
         }
         return x_ParsePos();
     } else {
-        while (m_FieldsToSkip > 0) {
+        for (; m_FieldsToSkip > 0; --m_FieldsToSkip) {
             if (!m_Tokenizer.SkipToken(m_Tokenizer.FindNewlineOrTab())) {
                 return eNeedMoreData;
             }
@@ -120,8 +120,6 @@ CVCFScanner::EParsingEvent CVCFScanner::Feed(
                 return x_MissingMandatoryFieldError(
                         s_HeaderLineColumns[m_ParsingState - eChrom + 1]);
             }
-            ++m_ParsingState;
-            --m_FieldsToSkip;
         }
     }
 
@@ -778,7 +776,7 @@ static bool ParseDataLine(CVCFScanner& vcf_scanner, FILE* input)
     return true;
 }
 
-int main(int argc, const char* argv[])
+int mainer(int argc, const char* argv[])
 {
     if (argc != 2) {
         fprintf(stderr, "Usage %s VCF_FILE\n", *argv);
