@@ -153,8 +153,8 @@ CVCFScanner::EParsingEvent CVCFScanner::Feed(
     case ePeekAfterEOL:
         x_ResetDataLine();
         return eOK;
-    default:
-        return eError;
+    default: // LCOV_EXCL_LINE
+        return eError; // LCOV_EXCL_LINE
     }
 }
 
@@ -291,6 +291,7 @@ EndOfHeaderLine:
 CVCFScanner::EParsingEvent CVCFScanner::ParseLoc()
 {
     if (m_ParsingState != eChrom) {
+        // LCOV_EXCL_START
         if (m_ParsingState < eChrom) {
             assert(false && "VCF header must be parsed first");
             return eError;
@@ -298,6 +299,7 @@ CVCFScanner::EParsingEvent CVCFScanner::ParseLoc()
 
         assert(false && "Must call ClearLine() before ParseLoc()");
         return eError;
+        // LCOV_EXCL_STOP
     }
 
     m_Pos = 0;
@@ -546,9 +548,11 @@ const char* CVCFScanner::x_ParseGT()
 CVCFScanner::EParsingEvent CVCFScanner::ParseGenotype()
 {
     if (m_ParsingState != eGenotypes) {
+        // LCOV_EXCL_START
         assert(false &&
                 "ParseGenotypeFormat must be called before ParseGenotype");
         return eError;
+        // LCOV_EXCL_STOP
     }
 
     if (m_CurrentGenotypeFieldIndex >= m_Header.m_SampleIDs.size()) {
