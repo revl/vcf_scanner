@@ -22,3 +22,4 @@
 * Search for TODO items in the source code.
 * Get rid of macros in the implementation to increase test coverage
 * Test line skipping
+* In unit tests, merge plan with expected.

@@ -64,6 +64,11 @@ public:
         return m_MetaInfo;
     }
 
+    bool HasGenotypeInfo() const
+    {
+        return m_GenotypeInfoPresent;
+    }
+
     const TSampleIDs& GetSampleIDs() const
     {
         return m_SampleIDs;
@@ -149,7 +154,9 @@ public:
     EParsingEvent Feed(const char* buffer, ssize_t buffer_size);
 
     // GetLineNumber returns the current line number in the
-    // input VCF file. The returned value is one-based.
+    // input VCF file before parsing the next token. The line
+    // number will increase after the last token on the current
+    // line has been parsed. The returned value is one-based.
     unsigned GetLineNumber() const
     {
         return m_Tokenizer.GetLineNumber();
@@ -327,12 +334,6 @@ private:
     EParsingEvent x_InvalidMetaInfoLineError()
     {
         return x_HeaderError("Malformed meta-information line");
-    }
-
-    EParsingEvent x_UnexpectedEOFInHeader()
-    {
-        return x_HeaderError(
-                "Unexpected end of file while parsing VCF file header");
     }
 
     EParsingEvent x_InvalidHeaderLineError()
