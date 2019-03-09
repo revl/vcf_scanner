@@ -65,9 +65,11 @@ private:
     static const char* x_FindCharFromSet(
             const char* buffer, size_t buffer_size, const bool* character_set)
     {
-        for (; buffer_size > 0; ++buffer, --buffer_size)
-            if (character_set[(unsigned char) *buffer])
+        for (; buffer_size > 0; ++buffer, --buffer_size) {
+            if (character_set[(unsigned char) *buffer]) {
                 return buffer;
+            }
+        }
 
         return nullptr;
     }
@@ -110,8 +112,9 @@ public:
 private:
     void x_SetTokenTermAndPossiblyIncrementLineNumber(int token_term)
     {
-        if ((m_TokenTerm = token_term) == '\n')
+        if ((m_TokenTerm = token_term) == '\n') {
             ++m_LineNumber;
+        }
     }
 
     void x_AdvanceBy(size_t number_of_bytes)
@@ -145,8 +148,9 @@ public:
             }
 
             if (*number > (UINT_MAX / 10) ||
-                    (*number == (UINT_MAX / 10) && digit > UINT_MAX % 10))
+                    (*number == (UINT_MAX / 10) && digit > UINT_MAX % 10)) {
                 return eIntegerOverflow;
+            }
 
             *number = *number * 10 + digit;
             ++*number_len;
@@ -159,13 +163,11 @@ public:
 
     bool PrepareTokenOrAccumulate(const char* const end_of_token)
     {
-        m_Skipping = false;
-
         if (end_of_token == nullptr) {
             if (m_CurrentPtr != nullptr) { // Check for EOF
-                if (m_Accumulating)
+                if (m_Accumulating) {
                     m_Accumulator.append(m_CurrentPtr, m_RemainingSize);
-                else {
+                } else {
                     m_Accumulating = true;
                     m_Accumulator.assign(m_CurrentPtr, m_RemainingSize);
                 }
@@ -177,9 +179,9 @@ public:
             // accumulated as the last token.
 
             x_SetTokenTermAndPossiblyIncrementLineNumber(EOF);
-            if (!m_Accumulating)
+            if (!m_Accumulating) {
                 m_Token.clear();
-            else {
+            } else {
                 m_Accumulating = false;
                 m_Token = m_Accumulator;
             }
@@ -191,15 +193,16 @@ public:
 
         const size_t token_len = end_of_token - m_CurrentPtr;
 
-        if (!m_Accumulating)
-            if (token_len > 0)
+        if (!m_Accumulating) {
+            if (token_len > 0) {
                 m_Token.assign(m_CurrentPtr,
                         *end_of_token == '\n' && end_of_token[-1] == '\r' ?
                                 token_len - 1 :
                                 token_len);
-            else
+            } else {
                 m_Token.clear();
-        else {
+            }
+        } else {
             m_Accumulating = false;
             if (token_len > 0) {
                 m_Accumulator.append(m_CurrentPtr,
@@ -207,8 +210,9 @@ public:
                                 token_len - 1 :
                                 token_len);
             } else if (*end_of_token == '\n' && m_Accumulator.length() > 0 &&
-                    m_Accumulator.back() == '\r')
+                    m_Accumulator.back() == '\r') {
                 m_Accumulator.pop_back();
+            }
 
             m_Token = m_Accumulator;
         }
@@ -224,22 +228,11 @@ public:
 
         if (end_of_token == nullptr) {
             if (m_CurrentPtr != nullptr) { // Check for EOF
-                if (m_Skipping)
-                    m_BytesSkipped += m_RemainingSize;
-                else {
-                    m_Skipping = true;
-                    m_BytesSkipped = m_RemainingSize;
-                }
-
                 return false;
             }
 
             // EOF has been reached.
             x_SetTokenTermAndPossiblyIncrementLineNumber(EOF);
-            if (!m_Skipping)
-                m_BytesSkipped = 0;
-            else
-                m_Skipping = false;
             return true;
         }
 
@@ -247,13 +240,6 @@ public:
                 (unsigned char) *end_of_token);
 
         const size_t skipped_len = end_of_token - m_CurrentPtr;
-
-        if (!m_Skipping)
-            m_BytesSkipped = skipped_len;
-        else {
-            m_Skipping = false;
-            m_BytesSkipped += skipped_len;
-        }
 
         x_AdvanceBy(skipped_len + 1);
 
@@ -269,8 +255,9 @@ public:
     {
         unsigned len = (unsigned int) m_Token.size();
 
-        if (len == 0)
+        if (len == 0) {
             return false;
+        }
 
         *number = 0;
 
@@ -278,23 +265,20 @@ public:
         unsigned digit;
 
         do {
-            if ((digit = (unsigned) *ptr - '0') > 9)
+            if ((digit = (unsigned) *ptr - '0') > 9) {
                 return false;
+            }
 
             if (*number > (UINT_MAX / 10) ||
-                    (*number == (UINT_MAX / 10) && digit > UINT_MAX % 10))
+                    (*number == (UINT_MAX / 10) && digit > UINT_MAX % 10)) {
                 return false;
+            }
 
             *number = *number * 10 + digit;
             ++ptr;
         } while (--len > 0);
 
         return true;
-    }
-
-    size_t GetBytesSkipped() const
-    {
-        return m_BytesSkipped;
     }
 
     bool TokenIsDot() const
@@ -311,8 +295,9 @@ public:
     {
         size_t delim_pos = m_Token.find(delim);
 
-        if (delim_pos == string::npos)
+        if (delim_pos == string::npos) {
             return false;
+        }
 
         if (key == nullptr) {
             if (value != nullptr) {
@@ -394,9 +379,6 @@ private:
 
     string m_Accumulator;
     bool m_Accumulating = false;
-
-    size_t m_BytesSkipped;
-    bool m_Skipping = false;
 
     CTempString m_Token;
 
