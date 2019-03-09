@@ -117,8 +117,11 @@ CVCFScanner::EParsingEvent CVCFScanner::Feed(
                 return eNeedMoreData;
             }
             if (m_Tokenizer.TokenIsLast()) {
+                unsigned missing_field =
+                        m_ParsingState - eChrom + 1 - m_FieldsToSkip;
+                m_FieldsToSkip = 0;
                 return x_MissingMandatoryFieldError(
-                        s_HeaderLineColumns[m_ParsingState - eChrom + 1]);
+                        s_HeaderLineColumns[missing_field]);
             }
         }
     }
@@ -678,6 +681,8 @@ static bool ParseDataLine(CVCFScanner& vcf_scanner, FILE* input)
 {
     cout << vcf_scanner.GetLineNumber() << ':';
 
+    const char* sep;
+
     if (!s_ParseToCompletion(vcf_scanner.ParseLoc(), vcf_scanner, input)) {
         return false;
     }
@@ -687,7 +692,6 @@ static bool ParseDataLine(CVCFScanner& vcf_scanner, FILE* input)
     if (!s_ParseToCompletion(vcf_scanner.ParseIDs(), vcf_scanner, input)) {
         return false;
     }
-    const char* sep;
     if (!vcf_scanner.GetIDs().empty()) {
         sep = "\t";
         for (const auto& id : vcf_scanner.GetIDs()) {
@@ -746,28 +750,30 @@ static bool ParseDataLine(CVCFScanner& vcf_scanner, FILE* input)
     } else
         cout << "\t.\t";
 
-    if (!s_ParseToCompletion(
-                vcf_scanner.ParseGenotypeFormat(), vcf_scanner, input)) {
-        return false;
-    }
-
-    if (!vcf_scanner.CaptureGT()) {
-        cout << endl;
-        cout << "\tERR: no GT key" << endl;
-        return true;
-    }
-
-    cout << "GT";
-
-    while (vcf_scanner.GenotypeAvailable()) {
+    if (vcf_scanner.GetHeader().HasGenotypeInfo()) {
         if (!s_ParseToCompletion(
-                    vcf_scanner.ParseGenotype(), vcf_scanner, input)) {
+                    vcf_scanner.ParseGenotypeFormat(), vcf_scanner, input)) {
             return false;
         }
-        sep = "\t";
-        for (auto allele : vcf_scanner.GetGT()) {
-            cout << sep << allele;
-            sep = vcf_scanner.IsPhasedGT() ? "|" : "/";
+
+        if (!vcf_scanner.CaptureGT()) {
+            cout << endl;
+            cout << "\tERR: no GT key" << endl;
+            return true;
+        }
+
+        cout << "GT";
+
+        while (vcf_scanner.GenotypeAvailable()) {
+            if (!s_ParseToCompletion(
+                        vcf_scanner.ParseGenotype(), vcf_scanner, input)) {
+                return false;
+            }
+            sep = "\t";
+            for (auto allele : vcf_scanner.GetGT()) {
+                cout << sep << allele;
+                sep = vcf_scanner.IsPhasedGT() ? "|" : "/";
+            }
         }
     }
 
@@ -776,7 +782,7 @@ static bool ParseDataLine(CVCFScanner& vcf_scanner, FILE* input)
     return true;
 }
 
-int mainer(int argc, const char* argv[])
+int main(int argc, const char* argv[])
 {
     if (argc != 2) {
         fprintf(stderr, "Usage %s VCF_FILE\n", *argv);
