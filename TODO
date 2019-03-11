@@ -23,3 +23,5 @@
 * Get rid of macros in the implementation to increase test coverage
 * Test line skipping
 * In unit tests, merge plan with expected.
+* Do fix the discrepancy between expected and reported line numbers
+  (especially in errors).

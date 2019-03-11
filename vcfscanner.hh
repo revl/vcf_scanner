@@ -297,7 +297,7 @@ public:
     EParsingEvent ClearLine();
 
 private:
-    enum EHeaderParsingState {
+    enum EParsingState {
         eFileFormatVersion,
         eMetaInfoKey,
         eMetaInfoValue,
@@ -459,6 +459,8 @@ private:
         }
         return m_GenotypeValues.data() + index;
     }
+
+    EParsingEvent x_SkipToState(EParsingState target_state);
 
     EParsingEvent x_ParseHeader();
     EParsingEvent x_ParsePos();

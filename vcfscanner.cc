@@ -183,9 +183,9 @@ CVCFScanner::EParsingEvent CVCFScanner::Feed(
     case ePeekAfterEOL:
         x_ResetDataLine();
         return eOK;
-    default: // LCOV_EXCL_LINE
-        return eError; // LCOV_EXCL_LINE
     }
+
+    return eError; // LCOV_EXCL_LINE
 }
 
 CVCFScanner::EParsingEvent CVCFScanner::x_ParseHeader()
