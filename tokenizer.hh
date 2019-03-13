@@ -56,7 +56,7 @@ public:
         return m_CurrentPtr == nullptr;
     }
 
-    const char* FindNewline()
+    const char* FindNewline() const
     {
         return (const char*) memchr(m_CurrentPtr, '\n', m_RemainingSize);
     }
@@ -75,35 +75,35 @@ private:
     }
 
 public:
-    const char* FindCharFromSet(const bool* character_set)
+    const char* FindCharFromSet(const bool* character_set) const
     {
         return x_FindCharFromSet(m_CurrentPtr, m_RemainingSize, character_set);
     }
 
-    const char* FindNewlineOrTab()
+    const char* FindNewlineOrTab() const
     {
         return x_FindCharFromSet(m_CurrentPtr, m_RemainingSize, m_NewlineOrTab);
     }
 
-    const char* FindNewlineOrTabOrEquals()
+    const char* FindNewlineOrTabOrEquals() const
     {
         return x_FindCharFromSet(
                 m_CurrentPtr, m_RemainingSize, m_NewlineOrTabOrEquals);
     }
 
-    const char* FindNewlineOrTabOrSemicolon()
+    const char* FindNewlineOrTabOrSemicolon() const
     {
         return x_FindCharFromSet(
                 m_CurrentPtr, m_RemainingSize, m_NewlineOrTabOrSemicolon);
     }
 
-    const char* FindNewlineOrTabOrComma()
+    const char* FindNewlineOrTabOrComma() const
     {
         return x_FindCharFromSet(
                 m_CurrentPtr, m_RemainingSize, m_NewlineOrTabOrComma);
     }
 
-    const char* FindNewlineOrTabOrColon()
+    const char* FindNewlineOrTabOrColon() const
     {
         return x_FindCharFromSet(
                 m_CurrentPtr, m_RemainingSize, m_NewlineOrTabOrColon);
