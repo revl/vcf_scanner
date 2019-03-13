@@ -22,7 +22,7 @@ public:
     static std::list<test_case*> test_case_list;
 };
 
-class abort_test_case : public exception
+class abort_test_case : public std::exception
 {
 };
 
