@@ -25,3 +25,5 @@
 * In unit tests, merge plan with expected.
 * Do fix the discrepancy between expected and reported line numbers
   (especially in errors).
+* Keep track of current byte position in the stream and have a getter
+  to return it.
