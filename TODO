@@ -9,8 +9,7 @@
 * Fix return x_MissingFieldError(s_HeaderLineColumns[m_DataLineParsingState]);
   -- it will return #CHROM
 * Check that field skipping works properly
-* Check that the mode of operation when the header and separate data lines
-  are parsed separately works correctly.
+* Detached header mode to parse the header and the data lines separately.
 * Move m_Accumulator to
   VCFScanner::PrepareTokenOrAccumulate(string* accumulator)
 * Test that every PrepareTokenOrAccumulate call correctly processes EOF & EOL
