@@ -26,3 +26,5 @@
   (especially in errors).
 * Keep track of current byte position in the stream and have a getter
   to return it.
+* Whenever "return eNeedMoreData", it's a possibility of unexpected EOF
+  error. Check for EOF.
