@@ -1,4 +1,4 @@
-#include "tokenizer.hh"
+#include <vcf_scanner/impl/vcf_tokenizer.hh>
 
 #include "test_case.h"
 

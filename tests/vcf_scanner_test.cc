@@ -1,4 +1,4 @@
-#include "vcfscanner.hh"
+#include <vcf_scanner/vcf_scanner.hh>
 
 #include "test_case.h"
 

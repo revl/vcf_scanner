@@ -33,7 +33,7 @@
 #include <cassert>
 #include <stdio.h>
 
-#include "tokenizer.hh"
+#include "impl/vcf_tokenizer.hh"
 
 using namespace std;
 

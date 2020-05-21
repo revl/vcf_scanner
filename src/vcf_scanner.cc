@@ -23,7 +23,7 @@
  * ===========================================================================
  */
 
-#include "vcfscanner.hh"
+#include <vcf_scanner/vcf_scanner.hh>
 
 #define NUMBER_OF_MANDATORY_COLUMNS 8
 

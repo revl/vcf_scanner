@@ -1,4 +1,4 @@
-#include "vcfscanner.hh"
+#include <vcf_scanner/vcf_scanner.hh>
 
 static char buffer[1];
 static size_t buffer_size;

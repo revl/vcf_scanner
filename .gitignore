@@ -1,9 +1,3 @@
-/.vscode/
-/dump_vcf
-/test_tokenizer
-/test_vcfscanner
-*-data
-*-coverage
-*.gc*
-make.sh
+/.*
+/build
 *.vcf
