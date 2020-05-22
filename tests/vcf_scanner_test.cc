@@ -7,12 +7,12 @@
 using TDump = std::stringstream;
 
 struct STestCase {
-    string vcf;
-    string test_plan;
-    string expected_result;
+    std::string vcf;
+    std::string test_plan;
+    std::string expected_result;
 };
 
-static vector<STestCase> s_TestCasesSensitiveToNewlineAtEOF = {
+static std::vector<STestCase> s_TestCasesSensitiveToNewlineAtEOF = {
         // Unexpected EOF in the header
         {
                 R"(##fileformat=VCFv4.0
@@ -31,7 +31,7 @@ static vector<STestCase> s_TestCasesSensitiveToNewlineAtEOF = {
                 "@ .", "@2\n"},
 };
 
-static vector<STestCase> s_TestCasesInsensitiveToNewlineAtEOF = {
+static std::vector<STestCase> s_TestCasesInsensitiveToNewlineAtEOF = {
         // Not a VCF file
         {R"(text
 file)",
@@ -137,55 +137,55 @@ E:Missing mandatory VCF field "QUAL"
 class CTestReader
 {
 public:
-    CTestReader(const string& vcf, size_t buf_size) :
+    CTestReader(const std::string& vcf, size_t buf_size) :
         m_VCFData(vcf),
         m_CurrentPtr(m_VCFData.data()),
         m_EOFPtr(m_CurrentPtr + m_VCFData.length()),
         m_BufSize(buf_size)
     {}
 
-    CVCFScanner::EParsingEvent ReadAndFeed(CVCFScanner& vcf_scanner)
+    vcf::CVCFScanner::EParsingEvent ReadAndFeed(vcf::CVCFScanner& vcf_scanner)
     {
         for (;;) {
             size_t buf_size = m_EOFPtr - m_CurrentPtr;
             if (buf_size > m_BufSize)
                 buf_size = m_BufSize;
-            CVCFScanner::EParsingEvent pe =
+            vcf::CVCFScanner::EParsingEvent pe =
                     vcf_scanner.Feed(m_CurrentPtr, buf_size);
             m_CurrentPtr += buf_size;
-            if (pe != CVCFScanner::eNeedMoreData)
+            if (pe != vcf::CVCFScanner::eNeedMoreData)
                 return pe;
         }
     }
 
 private:
-    string m_VCFData;
+    std::string m_VCFData;
     const char* m_CurrentPtr;
     const char* m_EOFPtr;
     size_t m_BufSize;
 };
 
-bool s_UpdateDump(TDump& dump, CVCFScanner& vcf_scanner,
-        CTestReader& test_reader, CVCFScanner::EParsingEvent pe)
+bool s_UpdateDump(TDump& dump, vcf::CVCFScanner& vcf_scanner,
+        CTestReader& test_reader, vcf::CVCFScanner::EParsingEvent pe)
 {
-    if (pe == CVCFScanner::eNeedMoreData) {
+    if (pe == vcf::CVCFScanner::eNeedMoreData) {
         pe = test_reader.ReadAndFeed(vcf_scanner);
     }
-    if (pe == CVCFScanner::eError) {
-        dump << "E:" << vcf_scanner.GetError().m_ErrorMessage << endl;
+    if (pe == vcf::CVCFScanner::eError) {
+        dump << "E:" << vcf_scanner.GetError() << std::endl;
         return false;
     }
-    if (pe == CVCFScanner::eOKWithWarnings) {
+    if (pe == vcf::CVCFScanner::eOKWithWarnings) {
         for (const auto& warning : vcf_scanner.GetWarnings()) {
             dump << "W:" << warning.line_number << warning.warning_message
-                 << endl;
+                 << std::endl;
         }
     }
     return true;
 }
 
-bool s_DumpIssuesAndClearLine(TDump& dump, CVCFScanner& vcf_scanner,
-        CTestReader& test_reader, CVCFScanner::EParsingEvent pe)
+bool s_DumpIssuesAndClearLine(TDump& dump, vcf::CVCFScanner& vcf_scanner,
+        CTestReader& test_reader, vcf::CVCFScanner::EParsingEvent pe)
 {
     if (!s_UpdateDump(dump, vcf_scanner, test_reader, pe)) {
         s_UpdateDump(dump, vcf_scanner, test_reader, vcf_scanner.ClearLine());
@@ -194,15 +194,15 @@ bool s_DumpIssuesAndClearLine(TDump& dump, CVCFScanner& vcf_scanner,
     return true;
 }
 
-const char* s_DumpMetaInfo(TDump& dump, const CVCFHeader::TMetaInfo& meta_info,
-        const char* test_plan)
+const char* s_DumpMetaInfo(TDump& dump,
+        const vcf::CVCFHeader::TMetaInfo& meta_info, const char* test_plan)
 {
     switch (*test_plan) {
     case '*':
         ++test_plan;
         for (const auto& kv : meta_info) {
             for (const auto& v : kv.second) {
-                dump << kv.first << '=' << v << endl;
+                dump << kv.first << '=' << v << std::endl;
             }
         }
         return test_plan;
@@ -210,13 +210,13 @@ const char* s_DumpMetaInfo(TDump& dump, const CVCFHeader::TMetaInfo& meta_info,
         do {
             size_t key_len = strcspn(++test_plan, ",}");
             if (key_len > 0) {
-                string key(test_plan, key_len);
+                std::string key(test_plan, key_len);
                 auto key_iter = meta_info.find(key);
                 if (key_iter == meta_info.end()) {
-                    dump << key << ": NOT FOUND" << endl;
+                    dump << key << ": NOT FOUND" << std::endl;
                 } else {
                     for (const auto& v : key_iter->second) {
-                        dump << key << '=' << v << endl;
+                        dump << key << '=' << v << std::endl;
                     }
                 }
                 test_plan += key_len;
@@ -228,12 +228,12 @@ const char* s_DumpMetaInfo(TDump& dump, const CVCFHeader::TMetaInfo& meta_info,
 }
 
 const char* s_DumpHeader(
-        TDump& dump, const CVCFHeader& vcf_header, const char* test_plan)
+        TDump& dump, const vcf::CVCFHeader& vcf_header, const char* test_plan)
 {
     switch (*test_plan) {
     case 'F':
         ++test_plan;
-        dump << "[" << vcf_header.GetFileFormat() << ']' << endl;
+        dump << "[" << vcf_header.GetFileFormat() << ']' << std::endl;
         break;
     case 'M':
         test_plan =
@@ -244,12 +244,12 @@ const char* s_DumpHeader(
         case '*':
             ++test_plan;
             for (const auto& s : vcf_header.GetSampleIDs()) {
-                dump << s << endl;
+                dump << s << std::endl;
             }
             break;
         case '#':
             ++test_plan;
-            dump << "S#=" << vcf_header.GetSampleIDs().size() << endl;
+            dump << "S#=" << vcf_header.GetSampleIDs().size() << std::endl;
             break;
         }
         break;
@@ -257,7 +257,7 @@ const char* s_DumpHeader(
         ++test_plan;
         dump << (vcf_header.HasGenotypeInfo() ? "with genotypes" :
                                                 "no genotypes")
-             << endl;
+             << std::endl;
     }
     return test_plan;
 }
@@ -279,7 +279,7 @@ void s_DumpList(TDump& dump, const T& l)
     }
 }
 
-const char* s_DumpGenotype(TDump& dump, CVCFScanner& vcf_scanner,
+const char* s_DumpGenotype(TDump& dump, vcf::CVCFScanner& vcf_scanner,
         CTestReader& test_reader, const char* test_plan)
 {
     switch (*test_plan) {
@@ -287,12 +287,13 @@ const char* s_DumpGenotype(TDump& dump, CVCFScanner& vcf_scanner,
         ++test_plan;
         if (s_DumpIssuesAndClearLine(dump, vcf_scanner, test_reader,
                     vcf_scanner.ParseGenotypeFormat())) {
-            dump << "GF:OK" << endl;
+            dump << "GF:OK" << std::endl;
         }
         break;
     case 'C':
         ++test_plan;
-        dump << (vcf_scanner.CaptureGT() ? "GT:OK" : "GT:NOT FOUND") << endl;
+        dump << (vcf_scanner.CaptureGT() ? "GT:OK" : "GT:NOT FOUND")
+             << std::endl;
         break;
     case 'T':
         ++test_plan;
@@ -300,26 +301,26 @@ const char* s_DumpGenotype(TDump& dump, CVCFScanner& vcf_scanner,
                     vcf_scanner.ParseGenotype())) {
             dump << "GT:";
             s_DumpList(dump, vcf_scanner.GetGT());
-            dump << endl;
+            dump << std::endl;
         }
         break;
     case 'A':
         ++test_plan;
         dump << (vcf_scanner.GenotypeAvailable() ? "GT:AVAIL" : "GT:NO MORE")
-             << endl;
+             << std::endl;
     }
     return test_plan;
 }
 
 void s_IneterpretTestPlan(const char* test_plan, TDump& dump,
-        CVCFScanner& vcf_scanner, CTestReader& test_reader)
+        vcf::CVCFScanner& vcf_scanner, CTestReader& test_reader)
 {
     for (;;) {
         switch (*test_plan) {
         case '.':
             ++test_plan;
             if (!vcf_scanner.AtEOF()) {
-                dump << "!EOF" << endl;
+                dump << "!EOF" << std::endl;
             }
             break;
         case ' ':
@@ -327,7 +328,7 @@ void s_IneterpretTestPlan(const char* test_plan, TDump& dump,
             break;
         case '@':
             ++test_plan;
-            dump << '@' << vcf_scanner.GetLineNumber() << endl;
+            dump << '@' << vcf_scanner.GetLineNumber() << std::endl;
             break;
         case 'H':
             test_plan =
@@ -338,7 +339,7 @@ void s_IneterpretTestPlan(const char* test_plan, TDump& dump,
             if (s_DumpIssuesAndClearLine(dump, vcf_scanner, test_reader,
                         vcf_scanner.ParseLoc())) {
                 dump << "L:" << vcf_scanner.GetChrom() << '@'
-                     << vcf_scanner.GetPos() << endl;
+                     << vcf_scanner.GetPos() << std::endl;
             }
             break;
         case '#':
@@ -347,7 +348,7 @@ void s_IneterpretTestPlan(const char* test_plan, TDump& dump,
                         vcf_scanner.ParseIDs())) {
                 dump << "ID:";
                 s_DumpList(dump, vcf_scanner.GetIDs());
-                dump << endl;
+                dump << std::endl;
             }
             break;
         case 'A':
@@ -356,14 +357,14 @@ void s_IneterpretTestPlan(const char* test_plan, TDump& dump,
                         vcf_scanner.ParseAlleles())) {
                 dump << "R:" << vcf_scanner.GetRef() << ";A:";
                 s_DumpList(dump, vcf_scanner.GetAlts());
-                dump << endl;
+                dump << std::endl;
             }
             break;
         case 'Q':
             ++test_plan;
             if (s_DumpIssuesAndClearLine(dump, vcf_scanner, test_reader,
                         vcf_scanner.ParseQuality())) {
-                dump << "Q:" << vcf_scanner.GetQuality() << endl;
+                dump << "Q:" << vcf_scanner.GetQuality() << std::endl;
             }
             break;
         case 'F':
@@ -372,7 +373,7 @@ void s_IneterpretTestPlan(const char* test_plan, TDump& dump,
                         vcf_scanner.ParseFilters())) {
                 dump << "F:";
                 s_DumpList(dump, vcf_scanner.GetFilters());
-                dump << endl;
+                dump << std::endl;
             }
             break;
         case 'I':
@@ -381,7 +382,7 @@ void s_IneterpretTestPlan(const char* test_plan, TDump& dump,
                         vcf_scanner.ParseInfo())) {
                 dump << "I:";
                 s_DumpList(dump, vcf_scanner.GetInfo());
-                dump << endl;
+                dump << std::endl;
             }
             break;
         case 'G':
@@ -392,7 +393,7 @@ void s_IneterpretTestPlan(const char* test_plan, TDump& dump,
             ++test_plan;
             s_UpdateDump(
                     dump, vcf_scanner, test_reader, vcf_scanner.ClearLine());
-            dump << ';' << endl;
+            dump << ';' << std::endl;
             break;
         default:
             return;
@@ -422,15 +423,15 @@ E:Missing mandatory VCF field "QUAL"
 
     TDump dump;
 
-    CVCFScanner vcf_scanner;
+    vcf::CVCFScanner vcf_scanner;
 
     if (s_UpdateDump(
-                dump, vcf_scanner, test_reader, CVCFScanner::eNeedMoreData)) {
-        s_IneterpretTestPlan(
-                tc.test_plan.c_str(), dump, vcf_scanner, test_reader);
+                dump, vcf_scanner, test_reader,
+vcf::CVCFScanner::eNeedMoreData)) { s_IneterpretTestPlan( tc.test_plan.c_str(),
+dump, vcf_scanner, test_reader);
     }
 
-    string result = dump.str();
+    std::string result = dump.str();
     if (tc.expected_result != result) {
         FILE* expected = fopen("EXPECTED", "wt");
         fwrite(tc.expected_result.data(), 1, tc.expected_result.length(),
@@ -443,22 +444,22 @@ E:Missing mandatory VCF field "QUAL"
 } */
 
 static bool s_RunTestCaseWithAllBufferSizes(
-        const STestCase& tc, const string& vcf)
+        const STestCase& tc, const std::string& vcf)
 {
     for (size_t buf_size = 1; buf_size <= vcf.length(); ++buf_size) {
         CTestReader test_reader(vcf, buf_size);
 
         TDump dump;
 
-        CVCFScanner vcf_scanner;
+        vcf::CVCFScanner vcf_scanner;
 
         if (s_UpdateDump(dump, vcf_scanner, test_reader,
-                    CVCFScanner::eNeedMoreData)) {
+                    vcf::CVCFScanner::eNeedMoreData)) {
             s_IneterpretTestPlan(
                     tc.test_plan.c_str(), dump, vcf_scanner, test_reader);
         }
 
-        string result = dump.str();
+        std::string result = dump.str();
         if (tc.expected_result != result) {
             CHECK(tc.expected_result == result);
             FILE* expected = fopen("EXPECTED", "wt");
@@ -475,13 +476,13 @@ static bool s_RunTestCaseWithAllBufferSizes(
 }
 
 static bool s_RunTestCaseWithAndWithoutCR(
-        const STestCase& tc, const string& vcf)
+        const STestCase& tc, const std::string& vcf)
 {
     if (!s_RunTestCaseWithAllBufferSizes(tc, vcf)) {
         return false;
     }
 
-    string vcf_with_crs = vcf;
+    std::string vcf_with_crs = vcf;
 
     size_t start_pos = 0;
     while ((start_pos = vcf_with_crs.find('\n', start_pos)) !=

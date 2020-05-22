@@ -23,7 +23,8 @@
  * ===========================================================================
  */
 
-#pragma once
+#ifndef VCF_SCANNER__HH
+#define VCF_SCANNER__HH
 
 #include <string>
 #include <vector>
@@ -35,13 +36,7 @@
 
 #include "impl/vcf_tokenizer.hh"
 
-using namespace std;
-
-class CErrorReport
-{
-public:
-    string m_ErrorMessage;
-};
+namespace vcf {
 
 class CVCFScanner;
 
@@ -49,12 +44,12 @@ class CVCFScanner;
 class CVCFHeader
 {
 public:
-    typedef vector<string> TMetaInfoLines;
-    typedef map<string, TMetaInfoLines> TMetaInfo;
-    typedef vector<string> TSampleIDs;
+    typedef std::vector<std::string> TMetaInfoLines;
+    typedef std::map<std::string, TMetaInfoLines> TMetaInfo;
+    typedef std::vector<std::string> TSampleIDs;
 
     // GetFileFormat returns the file format version.
-    const string& GetFileFormat() const
+    const std::string& GetFileFormat() const
     {
         return m_FileFormat;
     }
@@ -75,7 +70,7 @@ public:
     }
 
 private:
-    string m_FileFormat;
+    std::string m_FileFormat;
     TMetaInfo m_MetaInfo;
     bool m_GenotypeInfoPresent = false;
     TSampleIDs m_SampleIDs;
@@ -85,7 +80,7 @@ private:
 
 struct CVCFWarning {
     unsigned line_number;
-    string warning_message;
+    std::string warning_message;
 };
 
 // CVCFScanner parses VCF (Variant Call Format) files.
@@ -162,12 +157,12 @@ public:
         return m_Tokenizer.GetLineNumber();
     }
 
-    vector<CVCFWarning> GetWarnings() const
+    std::vector<CVCFWarning> GetWarnings() const
     {
         return m_Warnings;
     }
 
-    CErrorReport GetError() const
+    std::string GetError() const
     {
         return m_ErrorReport;
     }
@@ -191,7 +186,7 @@ public:
     // ParseLoc parses the CHROM and the POS fields.
     EParsingEvent ParseLoc();
     // GetChrom returns the CHROM field parsed by ParseLoc.
-    const string& GetChrom() const
+    const std::string& GetChrom() const
     {
         return m_Chrom;
     }
@@ -204,7 +199,7 @@ public:
     // ParseIDs parses the ID field.
     EParsingEvent ParseIDs();
     // GetID returns the IDs parsed by ParseIDs.
-    const vector<string>& GetIDs() const
+    const std::vector<std::string>& GetIDs() const
     {
         return m_IDs;
     }
@@ -212,12 +207,12 @@ public:
     // ParseRef parses the REF and the ALT fields.
     EParsingEvent ParseAlleles();
     // GetRef returns the REF field parsed by ParseAlleles.
-    const string& GetRef() const
+    const std::string& GetRef() const
     {
         return m_Ref;
     }
     // GetAlts returns the ALT field parsed by ParseAlleles.
-    const vector<string>& GetAlts() const
+    const std::vector<std::string>& GetAlts() const
     {
         return m_Alts;
     }
@@ -225,7 +220,7 @@ public:
     // ParseQuality parses the QUAL field.
     EParsingEvent ParseQuality();
     // GetQuality returns the QUAL field parsed by ParseQuality.
-    string GetQuality() const
+    std::string GetQuality() const
     {
         return m_Quality;
     }
@@ -235,7 +230,7 @@ public:
     // GetFilter returns the FILTER field parsed by ParseFilters.
     // The word "PASS" is returned when the current record passed
     // all filters.
-    const vector<string>& GetFilters() const
+    const std::vector<std::string>& GetFilters() const
     {
         return m_Filters;
     }
@@ -243,7 +238,7 @@ public:
     // ParseInfo parses the INFO key-value pairs.
     EParsingEvent ParseInfo();
     // GetInfo returns the INFO field parsed by ParseInfo.
-    const vector<string>& GetInfo() const
+    const std::vector<std::string>& GetInfo() const
     {
         return m_Info;
     }
@@ -260,17 +255,18 @@ public:
     // specified in the FORMAT field.
     bool CaptureGT();
 
-    // TODO bool CaptureString(const char* key, string* value);
-    // TODO bool CaptureStrings(const char* key, vector<string>* values);
+    // TODO bool CaptureString(const char* key, std::string* value);
+    // TODO bool CaptureStrings(const char* key, std::vector<std::string>*
+    // values);
     // TODO bool CaptureInt(const char* key, int* value);
-    // TODO bool CaptureInts(const char* key, vector<int>* values);
+    // TODO bool CaptureInts(const char* key, std::vector<int>* values);
 
     // ParseGenotype sequentially parses genotype fields.
     EParsingEvent ParseGenotype();
 
     // GetGT returns the GT values parsed by ParseGenotype in
     // its previous iteration.
-    const vector<int>& GetGT() const
+    const std::vector<int>& GetGT() const
     {
         return m_GT;
     }
@@ -321,13 +317,13 @@ private:
 
     int m_FieldsToSkip = 0;
 
-    string m_CurrentMetaInfoKey;
+    std::string m_CurrentMetaInfoKey;
 
     unsigned m_HeaderLineColumnOK;
 
     EParsingEvent x_HeaderError(const char* error_message)
     {
-        m_ErrorReport.m_ErrorMessage = error_message;
+        m_ErrorReport = error_message;
         return eError;
     }
 
@@ -341,9 +337,9 @@ private:
         return x_HeaderError("Malformed VCF header line");
     }
 
-    EParsingEvent x_DataLineError(const string& msg)
+    EParsingEvent x_DataLineError(const std::string& msg)
     {
-        m_ErrorReport.m_ErrorMessage = msg;
+        m_ErrorReport = msg;
         return eError;
     }
 
@@ -351,14 +347,14 @@ private:
     {
         m_ParsingState = eEndOfDataLine;
 
-        string msg = "Missing mandatory VCF field \"";
+        std::string msg = "Missing mandatory VCF field \"";
         msg += field_name;
         msg += '"';
         return x_DataLineError(msg);
     }
 
-    vector<CVCFWarning> m_Warnings;
-    CErrorReport m_ErrorReport;
+    std::vector<CVCFWarning> m_Warnings;
+    std::string m_ErrorReport;
 
     CVCFTokenizer m_Tokenizer;
 
@@ -367,15 +363,15 @@ private:
     unsigned m_NumberLen;
     size_t m_NextListIndex;
 
-    string m_Chrom;
+    std::string m_Chrom;
     unsigned m_Pos;
-    vector<string> m_IDs;
-    string m_Ref;
-    vector<string> m_Alts;
+    std::vector<std::string> m_IDs;
+    std::string m_Ref;
+    std::vector<std::string> m_Alts;
     bool m_AllelesParsed;
-    string m_Quality;
-    vector<string> m_Filters;
-    vector<string> m_Info;
+    std::string m_Quality;
+    std::vector<std::string> m_Filters;
+    std::vector<std::string> m_Info;
 
     void x_ResetDataLine()
     {
@@ -384,7 +380,7 @@ private:
     }
 
     // TODO Implement the INFO and FORMAT type definitions in the header.
-    set<string> m_FormatKeys;
+    std::set<std::string> m_FormatKeys;
 
     struct CLessCStr {
         bool operator()(const char* left, const char* right) const
@@ -397,7 +393,7 @@ private:
     struct SGenotypeKeyPositions {
         unsigned number_of_positions;
         unsigned GT;
-        map<const char*, unsigned, CLessCStr> other_keys;
+        std::map<const char*, unsigned, CLessCStr> other_keys;
 
         void Clear()
         {
@@ -423,20 +419,20 @@ private:
         union {
             bool* flag;
             int* int_scalar;
-            vector<int>* int_vector;
-            string* string_scalar;
-            vector<string>* string_vector;
+            std::vector<int>* int_vector;
+            std::string* string_scalar;
+            std::vector<std::string>* string_vector;
             char* char_scalar;
-            vector<char>* char_vector;
+            std::vector<char>* char_vector;
         };
     };
 
     unsigned m_CurrentGenotypeFieldIndex;
 
-    vector<SGenotypeValue> m_GenotypeValues;
+    std::vector<SGenotypeValue> m_GenotypeValues;
     unsigned m_CurrentGenotypeValueIndex;
 
-    vector<int> m_GT;
+    std::vector<int> m_GT;
     bool m_PhasedGT;
 
     void x_ClearGenotypeValues()
@@ -474,3 +470,7 @@ private:
 
     const char* x_ParseGT();
 };
+
+} /* namespace vcf */
+
+#endif /* !defined(VCF_SCANNER__HH) */

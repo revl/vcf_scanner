@@ -6,7 +6,7 @@ TEST_CASE(newline_no_newline)
 {
     static const char test_data[] = "two\nlines";
 
-    CVCFTokenizer tokenizer;
+    vcf::CVCFTokenizer tokenizer;
 
     // Start with a non-empty buffer
     tokenizer.SetNewBuffer(test_data, sizeof(test_data) - 1);
@@ -59,7 +59,7 @@ TEST_CASE(skipping)
 {
     static const char test_data[] = "1\n2";
 
-    CVCFTokenizer tokenizer;
+    vcf::CVCFTokenizer tokenizer;
 
     tokenizer.SetNewBuffer(test_data, sizeof(test_data) - 1);
     CHECK(tokenizer.GetLineNumber() == 1);
@@ -98,7 +98,7 @@ TEST_CASE(skipping)
 
 TEST_CASE(empty_token)
 {
-    CVCFTokenizer tokenizer;
+    vcf::CVCFTokenizer tokenizer;
 
     tokenizer.SetNewBuffer("\t\n", 2);
 
@@ -109,8 +109,9 @@ TEST_CASE(empty_token)
     CHECK(tokenizer.GetToken().empty());
 }
 
-static string s_Stitch3(CVCFTokenizer& tokenizer, const string& part1,
-        const string& part2, const string& part3)
+static std::string s_Stitch3(vcf::CVCFTokenizer& tokenizer,
+        const std::string& part1, const std::string& part2,
+        const std::string& part3)
 {
     tokenizer.SetNewBuffer(part1.data(), part1.length());
     REQUIRE(!tokenizer.PrepareTokenOrAccumulate(tokenizer.FindNewlineOrTab()));
@@ -126,7 +127,7 @@ static string s_Stitch3(CVCFTokenizer& tokenizer, const string& part1,
 
 TEST_CASE(seams)
 {
-    CVCFTokenizer tokenizer;
+    vcf::CVCFTokenizer tokenizer;
 
     tokenizer.SetNewBuffer("", 0);
     REQUIRE(tokenizer.PrepareTokenOrAccumulate(tokenizer.FindNewlineOrTab()));
@@ -142,7 +143,7 @@ TEST_CASE(seams)
 
 TEST_CASE(key_value)
 {
-    CVCFTokenizer tokenizer;
+    vcf::CVCFTokenizer tokenizer;
 
     CTempString k, v;
 
@@ -167,7 +168,7 @@ TEST_CASE(key_value)
 
 TEST_CASE(parse_unsigned_int)
 {
-    CVCFTokenizer tokenizer;
+    vcf::CVCFTokenizer tokenizer;
 
     static const char two_numbers[] = "\t12345-6789";
     tokenizer.SetNewBuffer(two_numbers, sizeof(two_numbers) - 1);
@@ -176,30 +177,30 @@ TEST_CASE(parse_unsigned_int)
 
     unsigned number = 0, number_len = 0;
     REQUIRE(tokenizer.ParseUnsignedInt(&number, &number_len) ==
-            CVCFTokenizer::eEndOfNumber);
+            vcf::CVCFTokenizer::eEndOfNumber);
     CHECK(number == 12345 && number_len == 5);
     CHECK(tokenizer.GetTokenTerm() == '-');
 
     number = number_len = 0;
     REQUIRE(tokenizer.ParseUnsignedInt(&number, &number_len) ==
-            CVCFTokenizer::eEndOfBuffer);
+            vcf::CVCFTokenizer::eEndOfBuffer);
     CHECK(number == 6789 && number_len == 4);
 
     number = number_len = 0;
     REQUIRE(tokenizer.ParseUnsignedInt(&number, &number_len) ==
-            CVCFTokenizer::eEndOfBuffer);
+            vcf::CVCFTokenizer::eEndOfBuffer);
     CHECK(number == 0 && number_len == 0);
 
     static const char overflow[] = "4294967296";
     tokenizer.SetNewBuffer(overflow, sizeof(overflow) - 1);
     number = number_len = 0;
     REQUIRE(tokenizer.ParseUnsignedInt(&number, &number_len) ==
-            CVCFTokenizer::eIntegerOverflow);
+            vcf::CVCFTokenizer::eIntegerOverflow);
 
     tokenizer.SetNewBuffer("", 0);
     number = number_len = 0;
     REQUIRE(tokenizer.ParseUnsignedInt(&number, &number_len) ==
-            CVCFTokenizer::eEndOfNumber);
+            vcf::CVCFTokenizer::eEndOfNumber);
     CHECK(number == 0 && number_len == 0);
 
     static const char test_data[] = "123456789\n4294967296\n\n100X\n";
@@ -221,7 +222,7 @@ TEST_CASE(parse_unsigned_int)
 
 TEST_CASE(simple_checks)
 {
-    CVCFTokenizer tokenizer;
+    vcf::CVCFTokenizer tokenizer;
 
     static const char test_data[] = ".\n. \n";
     tokenizer.SetNewBuffer(test_data, sizeof(test_data) - 1);

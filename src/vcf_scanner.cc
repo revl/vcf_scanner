@@ -25,6 +25,8 @@
 
 #include <vcf_scanner/vcf_scanner.hh>
 
+namespace vcf {
+
 #define NUMBER_OF_MANDATORY_COLUMNS 8
 
 static const char* const s_HeaderLineColumns[NUMBER_OF_MANDATORY_COLUMNS + 2] =
@@ -489,7 +491,7 @@ CVCFScanner::EParsingEvent CVCFScanner::x_ParseGenotypeFormat()
             }
             return x_DataLineError("No genotype information present");
         }
-        string key = m_Tokenizer.GetToken();
+        std::string key = m_Tokenizer.GetToken();
         auto key_iter = m_FormatKeys.insert(key).first;
         if (key == "GT") {
             if (m_GenotypeKeyPositions.number_of_positions != 0) {
@@ -524,7 +526,7 @@ const char* CVCFScanner::x_ParseGT()
 {
     m_GT.clear();
 
-    const string& token = m_Tokenizer.GetToken();
+    const std::string& token = m_Tokenizer.GetToken();
 
     size_t len = token.length();
 
@@ -678,3 +680,5 @@ CVCFScanner::EParsingEvent CVCFScanner::ClearLine()
 
     return eOK;
 }
+
+} /* namespace vcf */

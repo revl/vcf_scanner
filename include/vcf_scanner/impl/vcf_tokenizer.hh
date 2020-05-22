@@ -23,19 +23,17 @@
  * ===========================================================================
  */
 
-#pragma once
+#ifndef VCF_TOKENIZER__HH
+#define VCF_TOKENIZER__HH
 
 #include <string>
-#include <string.h>
 #include <iostream>
-#include <limits.h>
+#include <climits>
+#include <cstring>
 
-// For the EOF definition
-#include <stdio.h>
+typedef std::string CTempString;
 
-using namespace std;
-
-typedef string CTempString;
+namespace vcf {
 
 // CVCFTokenizer finds tokens in the input VCF stream.
 class CVCFTokenizer
@@ -295,7 +293,7 @@ public:
     {
         size_t delim_pos = m_Token.find(delim);
 
-        if (delim_pos == string::npos) {
+        if (delim_pos == std::string::npos) {
             return false;
         }
 
@@ -377,7 +375,7 @@ private:
     const char* m_CurrentPtr = nullptr;
     size_t m_RemainingSize = 0;
 
-    string m_Accumulator;
+    std::string m_Accumulator;
     bool m_Accumulating = false;
 
     CTempString m_Token;
@@ -398,3 +396,7 @@ public:
     // For extracting the GT values
     bool m_NewlineTabColonSlashBar[256];
 };
+
+} /* namespace vcf */
+
+#endif /* !defined(VCF_TOKENIZER__HH) */
