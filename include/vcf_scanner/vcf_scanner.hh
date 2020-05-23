@@ -1,5 +1,4 @@
-/* ===========================================================================
- *
+/*
  *                            PUBLIC DOMAIN NOTICE
  *               National Center for Biotechnology Information
  *
@@ -20,7 +19,6 @@
  *
  *  Please cite the author in any work or product based on this material.
  *
- * ===========================================================================
  */
 
 #ifndef VCF_SCANNER__HH
