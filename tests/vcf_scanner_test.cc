@@ -1,8 +1,10 @@
 #include <vcf_scanner/vcf_scanner.hh>
 
-#include "test_case.h"
-
 #include <sstream>
+
+#include "catch.hh"
+
+using Catch::Matchers::Equals;
 
 using Dump = std::stringstream;
 
@@ -460,6 +462,7 @@ static bool run_test_case_with_all_buffer_sizes(
         }
 
         std::string result = dump.str();
+        CHECK_THAT(tc.expected_result, Equals(result));
         if (tc.expected_result != result) {
             CHECK(tc.expected_result == result);
             FILE* expected = fopen("EXPECTED", "wt");
@@ -494,7 +497,7 @@ static bool run_test_case_with_and_without_cr(
     return run_test_case_with_all_buffer_sizes(tc, vcf_with_crs);
 }
 
-TEST_CASE(with_or_without_newline_at_eof)
+TEST_CASE("With or without newline at EOF")
 {
     for (const auto& tc : test_cases_sensitive_to_newline_at_eof) {
         if (!run_test_case_with_and_without_cr(tc, tc.vcf)) {
@@ -503,7 +506,7 @@ TEST_CASE(with_or_without_newline_at_eof)
     }
 }
 
-TEST_CASE(with_and_without_newline_at_eof)
+TEST_CASE("With and without newline at EOF")
 {
     for (const auto& tc : test_cases_insensitive_to_newline_at_eof) {
         if (!run_test_case_with_and_without_cr(tc, tc.vcf) ||

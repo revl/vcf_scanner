@@ -1,8 +1,10 @@
 #include <vcf_scanner/impl/vcf_tokenizer.hh>
 
-#include "test_case.h"
+#include "catch.hh"
 
-TEST_CASE(newline_no_newline)
+using Catch::Matchers::Equals;
+
+TEST_CASE("Newline, no newline")
 {
     static const char test_data[] = "two\nlines";
 
@@ -55,7 +57,7 @@ TEST_CASE(newline_no_newline)
     CHECK(tokenizer.get_terminator() == EOF);
 }
 
-TEST_CASE(skipping)
+TEST_CASE("Skipping")
 {
     static const char test_data[] = "1\n2";
 
@@ -96,7 +98,7 @@ TEST_CASE(skipping)
     CHECK(tokenizer.get_terminator() == EOF);
 }
 
-TEST_CASE(empty_token)
+TEST_CASE("Empty token")
 {
     VCF_tokenizer tokenizer;
 
@@ -129,7 +131,7 @@ static std::string stitch3(VCF_tokenizer& tokenizer, const std::string& part1,
     return tokenizer.get_token();
 }
 
-TEST_CASE(seams)
+TEST_CASE("Seams")
 {
     VCF_tokenizer tokenizer;
 
@@ -145,7 +147,7 @@ TEST_CASE(seams)
     CHECK(stitch3(tokenizer, "grid", "lock", "") == "gridlock");
 }
 
-TEST_CASE(key_value)
+TEST_CASE("Key-value")
 {
     VCF_tokenizer tokenizer;
 
@@ -157,7 +159,8 @@ TEST_CASE(key_value)
             tokenizer.find_newline_or_tab()));
 
     REQUIRE(tokenizer.get_key_value(&k, &v));
-    CHECK(k == "key" && v == "value");
+    CHECK(k == "key");
+    CHECK(v == "value");
 
     k.clear();
     v.clear();
@@ -172,7 +175,7 @@ TEST_CASE(key_value)
     REQUIRE(!tokenizer.get_key_value(&k, &v));
 }
 
-TEST_CASE(parse_unsigned_int)
+TEST_CASE("Parse unsigned int")
 {
     VCF_tokenizer tokenizer;
 
@@ -185,18 +188,21 @@ TEST_CASE(parse_unsigned_int)
     unsigned number = 0, number_len = 0;
     REQUIRE(tokenizer.parse_uint(&number, &number_len) ==
             VCF_tokenizer::end_of_number);
-    CHECK(number == 12345 && number_len == 5);
+    CHECK(number == 12345);
+    CHECK(number_len == 5);
     CHECK(tokenizer.get_terminator() == '-');
 
     number = number_len = 0;
     REQUIRE(tokenizer.parse_uint(&number, &number_len) ==
             VCF_tokenizer::end_of_buffer);
-    CHECK(number == 6789 && number_len == 4);
+    CHECK(number == 6789);
+    CHECK(number_len == 4);
 
     number = number_len = 0;
     REQUIRE(tokenizer.parse_uint(&number, &number_len) ==
             VCF_tokenizer::end_of_buffer);
-    CHECK(number == 0 && number_len == 0);
+    CHECK(number == 0);
+    CHECK(number_len == 0);
 
     static const char overflow[] = "4294967296";
     tokenizer.set_new_buffer(overflow, sizeof(overflow) - 1);
@@ -208,7 +214,8 @@ TEST_CASE(parse_unsigned_int)
     number = number_len = 0;
     REQUIRE(tokenizer.parse_uint(&number, &number_len) ==
             VCF_tokenizer::end_of_number);
-    CHECK(number == 0 && number_len == 0);
+    CHECK(number == 0);
+    CHECK(number_len == 0);
 
     static const char test_data[] = "123456789\n4294967296\n\n100X\n";
     tokenizer.set_new_buffer(test_data, sizeof(test_data) - 1);
@@ -231,7 +238,7 @@ TEST_CASE(parse_unsigned_int)
     CHECK(!tokenizer.get_token_as_uint(&number));
 }
 
-TEST_CASE(simple_checks)
+TEST_CASE("Simple checks")
 {
     VCF_tokenizer tokenizer;
 
