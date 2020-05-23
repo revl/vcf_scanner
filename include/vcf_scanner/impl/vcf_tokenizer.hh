@@ -31,36 +31,34 @@
 #include <climits>
 #include <cstring>
 
-typedef std::string CTempString;
+typedef std::string VCF_string_view;
 
-namespace vcf {
-
-// CVCFTokenizer finds tokens in the input VCF stream.
-class CVCFTokenizer
+// Tokenizer for VCF streams. This class is not meant to be used directly.
+class VCF_tokenizer
 {
 public:
-    void SetNewBuffer(const char* buffer, size_t buffer_size)
+    void set_new_buffer(const char* buffer, size_t buffer_size)
     {
-        m_CurrentPtr = (m_RemainingSize = buffer_size) > 0 ? buffer : nullptr;
+        current_ptr = (remaining_size = buffer_size) > 0 ? buffer : nullptr;
     }
 
-    bool BufferIsEmpty() const
+    bool buffer_is_empty() const
     {
-        return m_RemainingSize == 0;
+        return remaining_size == 0;
     }
 
-    bool AtEOF() const
+    bool at_eof() const
     {
-        return m_CurrentPtr == nullptr;
+        return current_ptr == nullptr;
     }
 
-    const char* FindNewline() const
+    const char* find_newline() const
     {
-        return (const char*) memchr(m_CurrentPtr, '\n', m_RemainingSize);
+        return (const char*) memchr(current_ptr, '\n', remaining_size);
     }
 
 private:
-    static const char* x_FindCharFromSet(
+    static const char* find_char_from_set(
             const char* buffer, size_t buffer_size, const bool* character_set)
     {
         for (; buffer_size > 0; ++buffer, --buffer_size) {
@@ -73,185 +71,192 @@ private:
     }
 
 public:
-    const char* FindCharFromSet(const bool* character_set) const
+    const char* find_char_from_set(const bool* character_set) const
     {
-        return x_FindCharFromSet(m_CurrentPtr, m_RemainingSize, character_set);
+        return find_char_from_set(current_ptr, remaining_size, character_set);
     }
 
-    const char* FindNewlineOrTab() const
+    const char* find_newline_or_tab() const
     {
-        return x_FindCharFromSet(m_CurrentPtr, m_RemainingSize, m_NewlineOrTab);
+        return find_char_from_set(current_ptr, remaining_size, newline_or_tab);
     }
 
-    const char* FindNewlineOrTabOrEquals() const
+    const char* find_newline_or_tab_or_equals() const
     {
-        return x_FindCharFromSet(
-                m_CurrentPtr, m_RemainingSize, m_NewlineOrTabOrEquals);
+        return find_char_from_set(
+                current_ptr, remaining_size, newline_or_tab_or_equals);
     }
 
-    const char* FindNewlineOrTabOrSemicolon() const
+    const char* find_newline_or_tab_or_semicolon() const
     {
-        return x_FindCharFromSet(
-                m_CurrentPtr, m_RemainingSize, m_NewlineOrTabOrSemicolon);
+        return find_char_from_set(
+                current_ptr, remaining_size, newline_or_tab_or_semicolon);
     }
 
-    const char* FindNewlineOrTabOrComma() const
+    const char* find_newline_or_tab_or_comma() const
     {
-        return x_FindCharFromSet(
-                m_CurrentPtr, m_RemainingSize, m_NewlineOrTabOrComma);
+        return find_char_from_set(
+                current_ptr, remaining_size, newline_or_tab_or_comma);
     }
 
-    const char* FindNewlineOrTabOrColon() const
+    const char* find_newline_or_tab_or_colon() const
     {
-        return x_FindCharFromSet(
-                m_CurrentPtr, m_RemainingSize, m_NewlineOrTabOrColon);
+        return find_char_from_set(
+                current_ptr, remaining_size, newline_or_tab_or_colon);
     }
 
 private:
-    void x_SetTokenTermAndPossiblyIncrementLineNumber(int token_term)
+    void set_terminator(int term)
     {
-        if ((m_TokenTerm = token_term) == '\n') {
-            ++m_LineNumber;
+        terminator = term;
+    }
+
+    void set_terminator_and_inc_line_num_if_newline(int term)
+    {
+        set_terminator(term);
+
+        if (term == '\n') {
+            ++line_number;
         }
     }
 
-    void x_AdvanceBy(size_t number_of_bytes)
+    void advance_by(size_t number_of_bytes)
     {
-        m_CurrentPtr += number_of_bytes;
-        m_RemainingSize -= number_of_bytes;
+        current_ptr += number_of_bytes;
+        remaining_size -= number_of_bytes;
     }
 
 public:
-    enum EIntParsingResult { eEndOfNumber, eIntegerOverflow, eEndOfBuffer };
+    enum Int_parsing_result { end_of_number, integer_overflow, end_of_buffer };
 
-    EIntParsingResult ParseUnsignedInt(unsigned* number, unsigned* number_len)
+    Int_parsing_result parse_uint(unsigned* number, unsigned* number_len)
     {
-        if (m_RemainingSize == 0) {
-            if (m_CurrentPtr == nullptr) {
-                x_SetTokenTermAndPossiblyIncrementLineNumber(EOF);
-                return eEndOfNumber;
+        if (remaining_size == 0) {
+            if (current_ptr == nullptr) {
+                set_terminator(EOF);
+                return end_of_number;
             }
-            return eEndOfBuffer;
+            return end_of_buffer;
         }
 
         unsigned digit;
 
         do {
-            if ((digit = (unsigned) *m_CurrentPtr - '0') > 9) {
-                x_SetTokenTermAndPossiblyIncrementLineNumber(
-                        (unsigned char) *m_CurrentPtr);
-                ++m_CurrentPtr;
-                --m_RemainingSize;
-                return eEndOfNumber;
+            if ((digit = (unsigned) *current_ptr - '0') > 9) {
+                set_terminator_and_inc_line_num_if_newline(
+                        (unsigned char) *current_ptr);
+                ++current_ptr;
+                --remaining_size;
+                return end_of_number;
             }
 
             if (*number > (UINT_MAX / 10) ||
                     (*number == (UINT_MAX / 10) && digit > UINT_MAX % 10)) {
-                return eIntegerOverflow;
+                return integer_overflow;
             }
 
             *number = *number * 10 + digit;
             ++*number_len;
 
-            ++m_CurrentPtr;
-        } while (--m_RemainingSize > 0);
+            ++current_ptr;
+        } while (--remaining_size > 0);
 
-        return eEndOfBuffer;
+        return end_of_buffer;
     }
 
-    bool PrepareTokenOrAccumulate(const char* const end_of_token)
+    bool prepare_token_or_accumulate(const char* const end_of_token)
     {
         if (end_of_token == nullptr) {
-            if (m_CurrentPtr != nullptr) { // Check for EOF
-                if (m_Accumulating) {
-                    m_Accumulator.append(m_CurrentPtr, m_RemainingSize);
+            if (current_ptr != nullptr) { // Check for EOF
+                if (accumulating) {
+                    accumulator.append(current_ptr, remaining_size);
                 } else {
-                    m_Accumulating = true;
-                    m_Accumulator.assign(m_CurrentPtr, m_RemainingSize);
+                    accumulating = true;
+                    accumulator.assign(current_ptr, remaining_size);
                 }
 
                 return false;
             }
 
-            // EOF has been reached. Return whatever has been
-            // accumulated as the last token.
+            // EOF has been reached. Return the accumulated
+            // bytes as the last token.
 
-            x_SetTokenTermAndPossiblyIncrementLineNumber(EOF);
-            if (!m_Accumulating) {
-                m_Token.clear();
+            set_terminator(EOF);
+            if (!accumulating) {
+                token.clear();
             } else {
-                m_Accumulating = false;
-                m_Token = m_Accumulator;
+                accumulating = false;
+                token = accumulator;
             }
             return true;
         }
 
-        x_SetTokenTermAndPossiblyIncrementLineNumber(
+        set_terminator_and_inc_line_num_if_newline(
                 (unsigned char) *end_of_token);
 
-        const size_t token_len = end_of_token - m_CurrentPtr;
+        const size_t token_len = end_of_token - current_ptr;
 
-        if (!m_Accumulating) {
+        if (!accumulating) {
             if (token_len > 0) {
-                m_Token.assign(m_CurrentPtr,
+                token.assign(current_ptr,
                         *end_of_token == '\n' && end_of_token[-1] == '\r' ?
                                 token_len - 1 :
                                 token_len);
             } else {
-                m_Token.clear();
+                token.clear();
             }
         } else {
-            m_Accumulating = false;
+            accumulating = false;
             if (token_len > 0) {
-                m_Accumulator.append(m_CurrentPtr,
+                accumulator.append(current_ptr,
                         *end_of_token == '\n' && end_of_token[-1] == '\r' ?
                                 token_len - 1 :
                                 token_len);
-            } else if (*end_of_token == '\n' && m_Accumulator.length() > 0 &&
-                    m_Accumulator.back() == '\r') {
-                m_Accumulator.pop_back();
+            } else if (*end_of_token == '\n' && accumulator.length() > 0 &&
+                    accumulator.back() == '\r') {
+                accumulator.pop_back();
             }
 
-            m_Token = m_Accumulator;
+            token = accumulator;
         }
 
-        x_AdvanceBy(token_len + 1);
+        advance_by(token_len + 1);
 
         return true;
     }
 
-    bool SkipToken(const char* const end_of_token)
+    bool skip_token(const char* const end_of_token)
     {
-        m_Accumulating = false;
+        accumulating = false;
 
         if (end_of_token == nullptr) {
-            if (m_CurrentPtr != nullptr) { // Check for EOF
+            if (current_ptr != nullptr) { // Check for EOF
                 return false;
             }
 
             // EOF has been reached.
-            x_SetTokenTermAndPossiblyIncrementLineNumber(EOF);
+            set_terminator(EOF);
             return true;
         }
 
-        x_SetTokenTermAndPossiblyIncrementLineNumber(
+        set_terminator_and_inc_line_num_if_newline(
                 (unsigned char) *end_of_token);
 
-        const size_t skipped_len = end_of_token - m_CurrentPtr;
+        const size_t skipped_len = end_of_token - current_ptr;
 
-        x_AdvanceBy(skipped_len + 1);
+        advance_by(skipped_len + 1);
 
         return true;
     }
 
-    const CTempString& GetToken() const
+    const VCF_string_view& get_token() const
     {
-        return m_Token;
+        return token;
     }
 
-    bool GetTokenAsUInt(unsigned* number) const
+    bool get_token_as_uint(unsigned* number) const
     {
-        unsigned len = (unsigned int) m_Token.size();
+        unsigned len = (unsigned int) token.size();
 
         if (len == 0) {
             return false;
@@ -259,7 +264,7 @@ public:
 
         *number = 0;
 
-        const char* ptr = m_Token.data();
+        const char* ptr = token.data();
         unsigned digit;
 
         do {
@@ -279,19 +284,20 @@ public:
         return true;
     }
 
-    bool TokenIsDot() const
+    bool token_is_dot() const
     {
-        return m_Token.empty() || m_Token == ".";
+        return token.empty() || (token.length() == 1 && token.front() == '.');
     }
 
-    bool TokenIsLast() const
+    bool token_is_last() const
     {
-        return m_TokenTerm == '\n' || m_TokenTerm == EOF;
+        return terminator == '\n' || terminator == EOF;
     }
 
-    bool GetKeyValue(CTempString* key, CTempString* value, char delim = '=')
+    bool get_key_value(
+            VCF_string_view* key, VCF_string_view* value, char delim = '=')
     {
-        size_t delim_pos = m_Token.find(delim);
+        size_t delim_pos = token.find(delim);
 
         if (delim_pos == std::string::npos) {
             return false;
@@ -301,102 +307,102 @@ public:
             if (value != nullptr) {
                 ++delim_pos;
 
-                value->assign(m_Token.data() + delim_pos,
-                        m_Token.length() - delim_pos);
+                value->assign(
+                        token.data() + delim_pos, token.length() - delim_pos);
             }
 
             return true;
         }
 
         if (value == nullptr) {
-            key->assign(m_Token.data(), delim_pos);
+            key->assign(token.data(), delim_pos);
 
             return true;
         }
 
-        key->assign(m_Token.data(), delim_pos);
+        key->assign(token.data(), delim_pos);
 
         ++delim_pos;
 
-        value->assign(m_Token.data() + delim_pos, m_Token.length() - delim_pos);
+        value->assign(token.data() + delim_pos, token.length() - delim_pos);
 
         return true;
     }
 
-    unsigned GetLineNumber() const
+    unsigned get_line_number() const
     {
-        return m_LineNumber;
+        return line_number;
     }
 
-    int GetTokenTerm() const
+    int get_terminator() const
     {
-        return m_TokenTerm;
+        return terminator;
     }
 
 public:
-    CVCFTokenizer()
+    VCF_tokenizer()
     {
-        memset(m_NewlineOrTab, 0, sizeof(m_NewlineOrTab));
-        m_NewlineOrTab['\n'] = true;
-        m_NewlineOrTab['\t'] = true;
+        memset(newline_or_tab, 0, sizeof(newline_or_tab));
+        newline_or_tab['\n'] = true;
+        newline_or_tab['\t'] = true;
 
-        memset(m_NewlineOrTabOrEquals, 0, sizeof(m_NewlineOrTabOrEquals));
-        m_NewlineOrTabOrEquals['\n'] = true;
-        m_NewlineOrTabOrEquals['\t'] = true;
-        m_NewlineOrTabOrEquals['='] = true;
+        memset(newline_or_tab_or_equals, 0, sizeof(newline_or_tab_or_equals));
+        newline_or_tab_or_equals['\n'] = true;
+        newline_or_tab_or_equals['\t'] = true;
+        newline_or_tab_or_equals['='] = true;
 
-        memset(m_NewlineOrTabOrSemicolon, 0, sizeof(m_NewlineOrTabOrSemicolon));
-        m_NewlineOrTabOrSemicolon['\n'] = true;
-        m_NewlineOrTabOrSemicolon['\t'] = true;
-        m_NewlineOrTabOrSemicolon[';'] = true;
+        memset(newline_or_tab_or_semicolon, 0,
+                sizeof(newline_or_tab_or_semicolon));
+        newline_or_tab_or_semicolon['\n'] = true;
+        newline_or_tab_or_semicolon['\t'] = true;
+        newline_or_tab_or_semicolon[';'] = true;
 
-        memset(m_NewlineOrTabOrComma, 0, sizeof(m_NewlineOrTabOrComma));
-        m_NewlineOrTabOrComma['\n'] = true;
-        m_NewlineOrTabOrComma['\t'] = true;
-        m_NewlineOrTabOrComma[','] = true;
+        memset(newline_or_tab_or_comma, 0, sizeof(newline_or_tab_or_comma));
+        newline_or_tab_or_comma['\n'] = true;
+        newline_or_tab_or_comma['\t'] = true;
+        newline_or_tab_or_comma[','] = true;
 
-        memset(m_NewlineOrTabOrColon, 0, sizeof(m_NewlineOrTabOrColon));
-        m_NewlineOrTabOrColon['\n'] = true;
-        m_NewlineOrTabOrColon['\t'] = true;
-        m_NewlineOrTabOrColon[':'] = true;
+        memset(newline_or_tab_or_colon, 0, sizeof(newline_or_tab_or_colon));
+        newline_or_tab_or_colon['\n'] = true;
+        newline_or_tab_or_colon['\t'] = true;
+        newline_or_tab_or_colon[':'] = true;
 
-        memset(m_NewlineTabColonSlashBar, 0, sizeof(m_NewlineTabColonSlashBar));
-        m_NewlineTabColonSlashBar['\n'] = true;
-        m_NewlineTabColonSlashBar['\t'] = true;
-        m_NewlineTabColonSlashBar[':'] = true;
-        m_NewlineTabColonSlashBar['/'] = true;
-        m_NewlineTabColonSlashBar['|'] = true;
+        memset(newline_tab_colon_slash_bar, 0,
+                sizeof(newline_tab_colon_slash_bar));
+        newline_tab_colon_slash_bar['\n'] = true;
+        newline_tab_colon_slash_bar['\t'] = true;
+        newline_tab_colon_slash_bar[':'] = true;
+        newline_tab_colon_slash_bar['/'] = true;
+        newline_tab_colon_slash_bar['|'] = true;
     }
 
 private:
-    unsigned m_LineNumber = 1;
-    int m_TokenTerm = '\0';
+    unsigned line_number = 1;
+    int terminator = '\0';
 
-    const char* m_CurrentPtr = nullptr;
-    size_t m_RemainingSize = 0;
+    const char* current_ptr = nullptr;
+    size_t remaining_size = 0;
 
-    std::string m_Accumulator;
-    bool m_Accumulating = false;
+    std::string accumulator;
+    bool accumulating = false;
 
-    CTempString m_Token;
+    VCF_string_view token;
 
 public:
     // For parsing the meta-information lines
     // as well as the first token of the header line
-    bool m_NewlineOrTabOrEquals[256];
+    bool newline_or_tab_or_equals[256];
     // For extracting CHROM, POS, REF, or QUAL fields,
     // or skipping any other field
-    bool m_NewlineOrTab[256];
+    bool newline_or_tab[256];
     // For extracting ID, FILTER, or INFO
-    bool m_NewlineOrTabOrSemicolon[256];
+    bool newline_or_tab_or_semicolon[256];
     // For extracting ALT
-    bool m_NewlineOrTabOrComma[256];
+    bool newline_or_tab_or_comma[256];
     // For extracting FORMAT or GENOTYPE
-    bool m_NewlineOrTabOrColon[256];
+    bool newline_or_tab_or_colon[256];
     // For extracting the GT values
-    bool m_NewlineTabColonSlashBar[256];
+    bool newline_tab_colon_slash_bar[256];
 };
-
-} /* namespace vcf */
 
 #endif /* !defined(VCF_TOKENIZER__HH) */

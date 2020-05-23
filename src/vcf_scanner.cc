@@ -25,508 +25,506 @@
 
 #include <vcf_scanner/vcf_scanner.hh>
 
-namespace vcf {
-
 #define NUMBER_OF_MANDATORY_COLUMNS 8
 
-static const char* const s_HeaderLineColumns[NUMBER_OF_MANDATORY_COLUMNS + 2] =
+static const char* const header_line_columns[NUMBER_OF_MANDATORY_COLUMNS + 2] =
         {"CHROM", "POS", "ID", "REF", "ALT", "QUAL", "FILTER", "INFO", "FORMAT",
                 "GENOTYPE"};
 
 #define PARSE_STRING(target_state)                                             \
-    if (!m_Tokenizer.PrepareTokenOrAccumulate(                                 \
-                m_Tokenizer.FindNewlineOrTab())) {                             \
-        return eNeedMoreData;                                                  \
+    if (!tokenizer.prepare_token_or_accumulate(                                \
+                tokenizer.find_newline_or_tab())) {                            \
+        return need_more_data;                                                 \
     }                                                                          \
-    if (m_Tokenizer.TokenIsLast()) {                                           \
-        return x_MissingMandatoryFieldError(                                   \
-                s_HeaderLineColumns[target_state - eChrom]);                   \
+    if (tokenizer.token_is_last()) {                                           \
+        return missing_mandatory_field_error(                                  \
+                header_line_columns[target_state - parsing_chrom]);            \
     }                                                                          \
-    m_ParsingState = target_state;
+    state = target_state;
 
 #define PARSE_STRING_LIST(target_state, container, character_set)              \
     do {                                                                       \
-        if (!m_Tokenizer.PrepareTokenOrAccumulate(                             \
-                    m_Tokenizer.FindCharFromSet(character_set))) {             \
-            return eNeedMoreData;                                              \
+        if (!tokenizer.prepare_token_or_accumulate(                            \
+                    tokenizer.find_char_from_set(character_set))) {            \
+            return need_more_data;                                             \
         }                                                                      \
-        if (m_Tokenizer.TokenIsLast()) {                                       \
-            return x_MissingMandatoryFieldError(                               \
-                    s_HeaderLineColumns[target_state - eChrom]);               \
+        if (tokenizer.token_is_last()) {                                       \
+            return missing_mandatory_field_error(                              \
+                    header_line_columns[target_state - parsing_chrom]);        \
         }                                                                      \
-        if (!m_Tokenizer.TokenIsDot()) {                                       \
-            if (m_NextListIndex < container.size()) {                          \
-                container.at(m_NextListIndex) = m_Tokenizer.GetToken();        \
+        if (!tokenizer.token_is_dot()) {                                       \
+            if (next_list_index < container.size()) {                          \
+                container.at(next_list_index) = tokenizer.get_token();         \
             } else {                                                           \
-                container.push_back(m_Tokenizer.GetToken());                   \
+                container.push_back(tokenizer.get_token());                    \
             }                                                                  \
-            ++m_NextListIndex;                                                 \
+            ++next_list_index;                                                 \
         }                                                                      \
-    } while (m_Tokenizer.GetTokenTerm() != '\t');                              \
-    container.resize(m_NextListIndex);                                         \
-    m_ParsingState = target_state;
+    } while (tokenizer.get_terminator() != '\t');                              \
+    container.resize(next_list_index);                                         \
+    state = target_state;
 
 #define SKIP_TO_STATE(target_state)                                            \
-    if (m_ParsingState < eChrom) {                                             \
+    if (state < parsing_chrom) {                                               \
         assert(false && "VCF header must be parsed first");                    \
-        return eError;                                                         \
+        return error;                                                          \
     }                                                                          \
-    if (m_ParsingState > target_state) {                                       \
-        assert(false && "ClearLine must call be called first");                \
-        return eError;                                                         \
+    if (state > target_state) {                                                \
+        assert(false && "clear_line() must call be called first");             \
+        return error;                                                          \
     }                                                                          \
-    while (m_ParsingState < target_state) {                                    \
-        if (!m_Tokenizer.SkipToken(m_Tokenizer.FindNewlineOrTab())) {          \
-            m_FieldsToSkip = target_state - m_ParsingState;                    \
-            m_ParsingState = target_state;                                     \
-            return eNeedMoreData;                                              \
+    while (state < target_state) {                                             \
+        if (!tokenizer.skip_token(tokenizer.find_newline_or_tab())) {          \
+            fields_to_skip = target_state - state;                             \
+            state = target_state;                                              \
+            return need_more_data;                                             \
         }                                                                      \
-        if (m_Tokenizer.TokenIsLast()) {                                       \
-            return x_MissingMandatoryFieldError(                               \
-                    s_HeaderLineColumns[m_ParsingState - eChrom + 1]);         \
+        if (tokenizer.token_is_last()) {                                       \
+            return missing_mandatory_field_error(                              \
+                    header_line_columns[state - parsing_chrom + 1]);           \
         }                                                                      \
-        ++m_ParsingState;                                                      \
+        ++state;                                                               \
     }
 
-CVCFScanner::EParsingEvent CVCFScanner::x_SkipToState(
-        CVCFScanner::EParsingState target_state)
+VCF_scanner::Parsing_event VCF_scanner::skip_to_state(
+        VCF_scanner::State target_state)
 {
     // LCOV_EXCL_START
-    if (m_ParsingState < eChrom) {
+    if (state < parsing_chrom) {
         assert(false && "VCF header must be parsed first");
-        return eError;
+        return error;
     }
-    if (m_ParsingState > target_state) {
-        assert(false && "ClearLine must call be called first");
-        return eError;
+    if (state > target_state) {
+        assert(false && "clear_line() must call be called first");
+        return error;
     }
     // LCOV_EXCL_STOP
 
-    while (m_ParsingState < target_state) {
-        if (!m_Tokenizer.SkipToken(m_Tokenizer.FindNewlineOrTab())) {
-            m_FieldsToSkip = target_state - m_ParsingState;
-            m_ParsingState = target_state;
-            return eNeedMoreData;
+    while (state < target_state) {
+        if (!tokenizer.skip_token(tokenizer.find_newline_or_tab())) {
+            fields_to_skip = target_state - state;
+            state = target_state;
+            return need_more_data;
         }
-        if (m_Tokenizer.TokenIsLast()) {
-            return x_MissingMandatoryFieldError(
-                    s_HeaderLineColumns[m_ParsingState - eChrom + 1]);
+        if (tokenizer.token_is_last()) {
+            return missing_mandatory_field_error(
+                    header_line_columns[state - parsing_chrom + 1]);
         }
-        ++m_ParsingState;
+        ++state;
     }
-    return eOK;
+    return ok;
 }
 
 #define PARSE_CHROM()                                                          \
-    PARSE_STRING(ePos);                                                        \
-    m_Chrom = m_Tokenizer.GetToken();
+    PARSE_STRING(parsing_pos);                                                 \
+    chrom = tokenizer.get_token();
 
 #define PARSE_REF()                                                            \
-    PARSE_STRING(eAlt);                                                        \
-    m_Ref = m_Tokenizer.GetToken();
+    PARSE_STRING(parsing_alt);                                                 \
+    ref = tokenizer.get_token();
 
-CVCFScanner::EParsingEvent CVCFScanner::Feed(
+VCF_scanner::Parsing_event VCF_scanner::feed(
         const char* buffer, ssize_t buffer_size)
 {
-    m_Tokenizer.SetNewBuffer(buffer, buffer_size);
+    tokenizer.set_new_buffer(buffer, buffer_size);
 
-    if (m_ParsingState == eGenotypes) {
-        return x_ParseGenotype();
+    if (state == parsing_genotypes) {
+        return continue_parsing_genotype();
     }
 
-    if (m_ParsingState <= ePos) {
-        if (m_ParsingState < eChrom) {
-            return x_ParseHeader();
+    if (state <= parsing_pos) {
+        if (state < parsing_chrom) {
+            return continue_parsing_header();
         }
-        if (m_ParsingState == eChrom) {
+        if (state == parsing_chrom) {
             PARSE_CHROM();
         }
-        return x_ParsePos();
+        return continue_parsing_pos();
     } else {
-        for (; m_FieldsToSkip > 0; --m_FieldsToSkip) {
-            if (!m_Tokenizer.SkipToken(m_Tokenizer.FindNewlineOrTab())) {
-                return eNeedMoreData;
+        for (; fields_to_skip > 0; --fields_to_skip) {
+            if (!tokenizer.skip_token(tokenizer.find_newline_or_tab())) {
+                return need_more_data;
             }
-            if (m_Tokenizer.TokenIsLast()) {
+            if (tokenizer.token_is_last()) {
                 unsigned missing_field =
-                        m_ParsingState - eChrom + 1 - m_FieldsToSkip;
-                m_FieldsToSkip = 0;
-                return x_MissingMandatoryFieldError(
-                        s_HeaderLineColumns[missing_field]);
+                        state - parsing_chrom + 1 - fields_to_skip;
+                fields_to_skip = 0;
+                return missing_mandatory_field_error(
+                        header_line_columns[missing_field]);
             }
         }
     }
 
-    switch (m_ParsingState) {
-    case eID:
-        return x_ParseIDs();
-    case eRef:
+    switch (state) {
+    case parsing_id:
+        return continue_parsing_ids();
+    case parsing_ref:
         PARSE_REF();
         /* FALL THROUGH */
-    case eAlt:
-        return x_ParseAlts();
-    case eQuality:
-        return x_ParseQuality();
-    case eFilter:
-        return x_ParseFilters();
-    case eInfoField:
-        return x_ParseInfo();
-    case eGenotypeFormat:
-        return x_ParseGenotypeFormat();
-    case eClearLine:
-        if (!m_Tokenizer.SkipToken(m_Tokenizer.FindNewline())) {
-            return eNeedMoreData;
+    case parsing_alt:
+        return continue_parsing_alts();
+    case parsing_quality:
+        return continue_parsing_quality();
+    case parsing_filter:
+        return continue_parsing_filters();
+    case parsing_info_field:
+        return continue_parsing_info();
+    case parsing_genotype_format:
+        return continue_parsing_genotype_format();
+    case skipping_to_next_line:
+        if (!tokenizer.skip_token(tokenizer.find_newline())) {
+            return need_more_data;
         }
-        if (m_Tokenizer.BufferIsEmpty() && !m_Tokenizer.AtEOF()) {
-            m_ParsingState = ePeekAfterEOL;
-            return eNeedMoreData;
+        if (tokenizer.buffer_is_empty() && !tokenizer.at_eof()) {
+            state = peeking_beyond_newline;
+            return need_more_data;
         }
         /* FALL THROUGH */
-    case ePeekAfterEOL:
-        x_ResetDataLine();
-        return eOK;
+    case peeking_beyond_newline:
+        reset_data_line();
+        return ok;
     }
 
-    return eError; // LCOV_EXCL_LINE
+    return error; // LCOV_EXCL_LINE
 }
 
-CVCFScanner::EParsingEvent CVCFScanner::x_ParseHeader()
+VCF_scanner::Parsing_event VCF_scanner::continue_parsing_header()
 {
-    switch (m_ParsingState) {
-    case eFileFormatVersion:
-        if (!m_Tokenizer.PrepareTokenOrAccumulate(m_Tokenizer.FindNewline())) {
-            return eNeedMoreData;
+    switch (state) {
+    case parsing_fileformat:
+        if (!tokenizer.prepare_token_or_accumulate(tokenizer.find_newline())) {
+            return need_more_data;
         }
 
         {
-            CTempString key, value;
+            VCF_string_view key, value;
 
-            if (!m_Tokenizer.GetKeyValue(&key, &value) ||
+            if (!tokenizer.get_key_value(&key, &value) ||
                     key != "##fileformat") {
-                return x_HeaderError("VCF file must start with '##fileformat'");
+                return header_error("VCF files must start with '##fileformat'");
             }
 
-            m_Header.m_FileFormat = value;
+            header.file_format_version = value;
         }
 
-    ParseMetaInfoKey:
-        m_ParsingState = eMetaInfoKey;
+    parse_meta_info_key:
+        state = parsing_metainfo_key;
         /* FALL THROUGH */
 
-    case eMetaInfoKey:
-        if (!m_Tokenizer.PrepareTokenOrAccumulate(
-                    m_Tokenizer.FindNewlineOrTabOrEquals())) {
-            return eNeedMoreData;
+    case parsing_metainfo_key:
+        if (!tokenizer.prepare_token_or_accumulate(
+                    tokenizer.find_newline_or_tab_or_equals())) {
+            return need_more_data;
         }
 
-        if (m_Tokenizer.TokenIsLast()) {
-            return x_InvalidMetaInfoLineError();
+        if (tokenizer.token_is_last()) {
+            return invalid_meta_info_line_error();
         }
 
-        if (m_Tokenizer.GetTokenTerm() == '\t') {
-            if (m_Tokenizer.GetToken().substr(1) != s_HeaderLineColumns[0]) {
-                return x_InvalidMetaInfoLineError();
+        if (tokenizer.get_terminator() == '\t') {
+            if (tokenizer.get_token().substr(1) != header_line_columns[0]) {
+                return invalid_meta_info_line_error();
             }
-            m_HeaderLineColumnOK = 1;
-            goto ParseHeaderLine;
+            header_line_column_ok = 1;
+            goto parse_header_line;
         }
 
         // Found an equals sign - save the key and proceed
         // to parsing the value.
         {
-            const CTempString& key = m_Tokenizer.GetToken();
+            const VCF_string_view& key = tokenizer.get_token();
             if (key.length() < 3 || key[0] != '#' || key[1] != '#') {
-                return x_InvalidMetaInfoLineError();
+                return invalid_meta_info_line_error();
             }
-            m_CurrentMetaInfoKey = key.substr(2);
+            current_meta_info_key = key.substr(2);
         }
 
-        m_ParsingState = eMetaInfoValue;
+        state = parsing_metainfo_value;
         /* FALL THROUGH */
 
-    case eMetaInfoValue:
-        if (!m_Tokenizer.PrepareTokenOrAccumulate(m_Tokenizer.FindNewline())) {
-            return eNeedMoreData;
+    case parsing_metainfo_value:
+        if (!tokenizer.prepare_token_or_accumulate(tokenizer.find_newline())) {
+            return need_more_data;
         }
 
-        if (m_Tokenizer.GetTokenTerm() == EOF) {
-            return x_HeaderError(
+        if (tokenizer.get_terminator() == EOF) {
+            return header_error(
                     "Unexpected end of file while parsing VCF file header");
         }
 
-        m_Header.m_MetaInfo[m_CurrentMetaInfoKey].push_back(
-                m_Tokenizer.GetToken());
+        header.meta_info[current_meta_info_key].push_back(
+                tokenizer.get_token());
 
         // Go back to parsing the next key.
-        goto ParseMetaInfoKey;
+        goto parse_meta_info_key;
 
-    ParseHeaderLine:
-        m_ParsingState = eHeaderLineColumns;
+    parse_header_line:
+        state = parsing_header_line_columns;
         /* FALL THROUGH */
 
-    case eHeaderLineColumns:
+    case parsing_header_line_columns:
         do {
-            if (!m_Tokenizer.PrepareTokenOrAccumulate(
-                        m_Tokenizer.FindNewlineOrTab())) {
-                return eNeedMoreData;
+            if (!tokenizer.prepare_token_or_accumulate(
+                        tokenizer.find_newline_or_tab())) {
+                return need_more_data;
             }
 
-            if (m_Tokenizer.GetToken() !=
-                    s_HeaderLineColumns[m_HeaderLineColumnOK]) {
-                return x_InvalidHeaderLineError();
+            if (tokenizer.get_token() !=
+                    header_line_columns[header_line_column_ok]) {
+                return invalid_header_line_error();
             }
 
-            ++m_HeaderLineColumnOK;
+            ++header_line_column_ok;
 
-            if (m_Tokenizer.TokenIsLast()) {
-                if (m_HeaderLineColumnOK < NUMBER_OF_MANDATORY_COLUMNS) {
-                    return x_InvalidHeaderLineError();
+            if (tokenizer.token_is_last()) {
+                if (header_line_column_ok < NUMBER_OF_MANDATORY_COLUMNS) {
+                    return invalid_header_line_error();
                 }
-                if (m_HeaderLineColumnOK > NUMBER_OF_MANDATORY_COLUMNS) {
+                if (header_line_column_ok > NUMBER_OF_MANDATORY_COLUMNS) {
                     // The FORMAT field is present,
                     // but there are no samples.
-                    m_Header.m_GenotypeInfoPresent = true;
+                    header.genotype_info_present = true;
                 }
-                goto EndOfHeaderLine;
+                goto end_of_header_line;
             }
 
             // The current token ends with a tab.
             // Parse the next header line column.
-        } while (m_HeaderLineColumnOK <= NUMBER_OF_MANDATORY_COLUMNS);
+        } while (header_line_column_ok <= NUMBER_OF_MANDATORY_COLUMNS);
 
-        m_Header.m_GenotypeInfoPresent = true;
-        m_ParsingState = eSampleIDs;
+        header.genotype_info_present = true;
+        state = parsing_sample_ids;
         /* FALL THROUGH */
 
-    case eSampleIDs:
+    case parsing_sample_ids:
         do {
-            if (!m_Tokenizer.PrepareTokenOrAccumulate(
-                        m_Tokenizer.FindNewlineOrTab())) {
-                return eNeedMoreData;
+            if (!tokenizer.prepare_token_or_accumulate(
+                        tokenizer.find_newline_or_tab())) {
+                return need_more_data;
             }
 
-            m_Header.m_SampleIDs.push_back(m_Tokenizer.GetToken());
-        } while (m_Tokenizer.GetTokenTerm() == '\t');
+            header.sample_ids.push_back(tokenizer.get_token());
+        } while (tokenizer.get_terminator() == '\t');
     }
 
-EndOfHeaderLine:
-    if (m_Tokenizer.BufferIsEmpty() && !m_Tokenizer.AtEOF()) {
-        m_ParsingState = ePeekAfterEOL;
-        return eNeedMoreData;
+end_of_header_line:
+    if (tokenizer.buffer_is_empty() && !tokenizer.at_eof()) {
+        state = peeking_beyond_newline;
+        return need_more_data;
     }
 
-    x_ResetDataLine();
+    reset_data_line();
 
-    return eOK;
+    return ok;
 }
 
-CVCFScanner::EParsingEvent CVCFScanner::ParseLoc()
+VCF_scanner::Parsing_event VCF_scanner::parse_loc()
 {
     // LCOV_EXCL_START
-    if (m_ParsingState != eChrom) {
-        if (m_ParsingState < eChrom) {
+    if (state != parsing_chrom) {
+        if (state < parsing_chrom) {
             assert(false && "VCF header must be parsed first");
-            return eError;
+            return error;
         }
 
-        assert(false && "Must call ClearLine() before ParseLoc()");
-        return eError;
+        assert(false && "Must call clear_line() before parse_loc()");
+        return error;
     }
     // LCOV_EXCL_STOP
 
-    m_Pos = 0;
-    m_NumberLen = 0;
+    pos = 0;
+    number_len = 0;
 
     PARSE_CHROM();
 
-    return x_ParsePos();
+    return continue_parsing_pos();
 }
 
-CVCFScanner::EParsingEvent CVCFScanner::x_ParsePos()
+VCF_scanner::Parsing_event VCF_scanner::continue_parsing_pos()
 {
-    switch (m_Tokenizer.ParseUnsignedInt(&m_Pos, &m_NumberLen)) {
-    case CVCFTokenizer::eEndOfBuffer:
-        return eNeedMoreData;
-    case CVCFTokenizer::eIntegerOverflow:
-        return x_DataLineError("Integer overflow in the POS column");
-    default /* case CVCFTokenizer::eEndOfNumber */:
+    switch (tokenizer.parse_uint(&pos, &number_len)) {
+    case VCF_tokenizer::end_of_buffer:
+        return need_more_data;
+    case VCF_tokenizer::integer_overflow:
+        return data_line_error("Integer overflow in the POS column");
+    default /* case VCF_tokenizer::end_of_number */:
         break;
     }
 
-    if (m_NumberLen == 0) {
-        return x_DataLineError("Missing an integer in the POS column");
+    if (number_len == 0) {
+        return data_line_error("Missing an integer in the POS column");
     }
 
-    if (m_Tokenizer.GetTokenTerm() != '\t') {
-        return x_DataLineError("Invalid data line format");
+    if (tokenizer.get_terminator() != '\t') {
+        return data_line_error("Invalid data line format");
     }
 
-    m_ParsingState = eID;
-    return eOK;
+    state = parsing_id;
+    return ok;
 }
 
-CVCFScanner::EParsingEvent CVCFScanner::ParseIDs()
+VCF_scanner::Parsing_event VCF_scanner::parse_ids()
 {
-    m_NextListIndex = 0;
+    next_list_index = 0;
 
-    SKIP_TO_STATE(eID);
+    SKIP_TO_STATE(parsing_id);
 
-    return x_ParseIDs();
+    return continue_parsing_ids();
 }
 
-CVCFScanner::EParsingEvent CVCFScanner::x_ParseIDs()
+VCF_scanner::Parsing_event VCF_scanner::continue_parsing_ids()
 {
-    PARSE_STRING_LIST(eRef, m_IDs, m_Tokenizer.m_NewlineOrTabOrSemicolon);
-    return eOK;
+    PARSE_STRING_LIST(parsing_ref, ids, tokenizer.newline_or_tab_or_semicolon);
+    return ok;
 }
 
-CVCFScanner::EParsingEvent CVCFScanner::ParseAlleles()
+VCF_scanner::Parsing_event VCF_scanner::parse_alleles()
 {
-    m_NextListIndex = 0;
+    next_list_index = 0;
 
-    SKIP_TO_STATE(eRef);
+    SKIP_TO_STATE(parsing_ref);
 
     PARSE_REF();
 
-    return x_ParseAlts();
+    return continue_parsing_alts();
 }
 
-CVCFScanner::EParsingEvent CVCFScanner::x_ParseAlts()
+VCF_scanner::Parsing_event VCF_scanner::continue_parsing_alts()
 {
-    PARSE_STRING_LIST(eQuality, m_Alts, m_Tokenizer.m_NewlineOrTabOrComma);
+    PARSE_STRING_LIST(parsing_quality, alts, tokenizer.newline_or_tab_or_comma);
 
-    m_AllelesParsed = true;
+    alleles_parsed = true;
 
-    return eOK;
+    return ok;
 }
 
-CVCFScanner::EParsingEvent CVCFScanner::ParseQuality()
+VCF_scanner::Parsing_event VCF_scanner::parse_quality()
 {
-    SKIP_TO_STATE(eQuality);
+    SKIP_TO_STATE(parsing_quality);
 
-    return x_ParseQuality();
+    return continue_parsing_quality();
 }
 
-CVCFScanner::EParsingEvent CVCFScanner::x_ParseQuality()
+VCF_scanner::Parsing_event VCF_scanner::continue_parsing_quality()
 {
-    PARSE_STRING(eFilter);
-    if (!m_Tokenizer.TokenIsDot())
-        m_Quality = m_Tokenizer.GetToken();
+    PARSE_STRING(parsing_filter);
+    if (!tokenizer.token_is_dot())
+        quality = tokenizer.get_token();
     else
-        m_Quality.clear();
+        quality.clear();
 
-    return eOK;
+    return ok;
 }
 
-CVCFScanner::EParsingEvent CVCFScanner::ParseFilters()
+VCF_scanner::Parsing_event VCF_scanner::parse_filters()
 {
-    m_NextListIndex = 0;
+    next_list_index = 0;
 
-    EParsingEvent pe = x_SkipToState(eFilter);
-    if (pe != eOK) {
+    Parsing_event pe = skip_to_state(parsing_filter);
+    if (pe != ok) {
         return pe;
     }
 
-    return x_ParseFilters();
+    return continue_parsing_filters();
 }
 
-CVCFScanner::EParsingEvent CVCFScanner::x_ParseFilters()
+VCF_scanner::Parsing_event VCF_scanner::continue_parsing_filters()
 {
     PARSE_STRING_LIST(
-            eInfoField, m_Filters, m_Tokenizer.m_NewlineOrTabOrSemicolon);
+            parsing_info_field, filters, tokenizer.newline_or_tab_or_semicolon);
 
-    return eOK;
+    return ok;
 }
 
-CVCFScanner::EParsingEvent CVCFScanner::ParseInfo()
+VCF_scanner::Parsing_event VCF_scanner::parse_info()
 {
-    m_Info.clear();
+    info.clear();
 
-    SKIP_TO_STATE(eInfoField);
+    SKIP_TO_STATE(parsing_info_field);
 
-    return x_ParseInfo();
+    return continue_parsing_info();
 }
 
-CVCFScanner::EParsingEvent CVCFScanner::x_ParseInfo()
-{
-    do {
-        if (!m_Tokenizer.PrepareTokenOrAccumulate(m_Tokenizer.FindCharFromSet(
-                    m_Tokenizer.m_NewlineOrTabOrSemicolon))) {
-            return eNeedMoreData;
-        }
-        if (m_Tokenizer.TokenIsLast()) {
-            m_ParsingState = eEndOfDataLine;
-            return eOK;
-        }
-        if (!m_Tokenizer.TokenIsDot()) {
-            m_Info.push_back(m_Tokenizer.GetToken());
-        }
-    } while (m_Tokenizer.GetTokenTerm() != '\t');
-
-    m_ParsingState = eGenotypeFormat;
-
-    return eOK;
-}
-
-CVCFScanner::EParsingEvent CVCFScanner::ParseGenotypeFormat()
-{
-    m_GenotypeKeyPositions.Clear();
-
-    SKIP_TO_STATE(eGenotypeFormat);
-
-    return x_ParseGenotypeFormat();
-}
-
-CVCFScanner::EParsingEvent CVCFScanner::x_ParseGenotypeFormat()
+VCF_scanner::Parsing_event VCF_scanner::continue_parsing_info()
 {
     do {
-        if (!m_Tokenizer.PrepareTokenOrAccumulate(m_Tokenizer.FindCharFromSet(
-                    m_Tokenizer.m_NewlineOrTabOrColon))) {
-            return eNeedMoreData;
+        if (!tokenizer.prepare_token_or_accumulate(tokenizer.find_char_from_set(
+                    tokenizer.newline_or_tab_or_semicolon))) {
+            return need_more_data;
         }
-        if (m_Tokenizer.TokenIsLast()) {
-            m_ParsingState = eEndOfDataLine;
-            if (m_Header.m_SampleIDs.empty()) {
-                return eOK;
+        if (tokenizer.token_is_last()) {
+            state = end_of_data_line;
+            return ok;
+        }
+        if (!tokenizer.token_is_dot()) {
+            info.push_back(tokenizer.get_token());
+        }
+    } while (tokenizer.get_terminator() != '\t');
+
+    state = parsing_genotype_format;
+
+    return ok;
+}
+
+VCF_scanner::Parsing_event VCF_scanner::parse_genotype_format()
+{
+    genotype_key_positions.clear();
+
+    SKIP_TO_STATE(parsing_genotype_format);
+
+    return continue_parsing_genotype_format();
+}
+
+VCF_scanner::Parsing_event VCF_scanner::continue_parsing_genotype_format()
+{
+    do {
+        if (!tokenizer.prepare_token_or_accumulate(tokenizer.find_char_from_set(
+                    tokenizer.newline_or_tab_or_colon))) {
+            return need_more_data;
+        }
+        if (tokenizer.token_is_last()) {
+            state = end_of_data_line;
+            if (header.sample_ids.empty()) {
+                return ok;
             }
-            return x_DataLineError("No genotype information present");
+            return data_line_error("No genotype information present");
         }
-        std::string key = m_Tokenizer.GetToken();
-        auto key_iter = m_FormatKeys.insert(key).first;
+        std::string key = tokenizer.get_token();
+        auto key_iter = format_keys.insert(key).first;
         if (key == "GT") {
-            if (m_GenotypeKeyPositions.number_of_positions != 0) {
+            if (genotype_key_positions.number_of_positions != 0) {
                 // TODO Generate a warning: GT must be the first key.
             }
-            m_GenotypeKeyPositions.GT =
-                    ++m_GenotypeKeyPositions.number_of_positions;
+            genotype_key_positions.gt =
+                    ++genotype_key_positions.number_of_positions;
         } else
-            m_GenotypeKeyPositions.other_keys[key_iter->c_str()] =
-                    ++m_GenotypeKeyPositions.number_of_positions;
-    } while (m_Tokenizer.GetTokenTerm() != '\t');
+            genotype_key_positions.other_keys[key_iter->c_str()] =
+                    ++genotype_key_positions.number_of_positions;
+    } while (tokenizer.get_terminator() != '\t');
 
-    x_ClearGenotypeValues();
-    m_ParsingState = eGenotypes;
-    return eOK;
+    reset_genotype_values();
+    state = parsing_genotypes;
+    return ok;
 }
 
-bool CVCFScanner::CaptureGT()
+bool VCF_scanner::capture_gt()
 {
-    unsigned gt_index = m_GenotypeKeyPositions.GT;
+    unsigned gt_index = genotype_key_positions.gt;
     if (gt_index == 0) {
         return false;
     }
     --gt_index;
-    auto gt_value = x_AllocGenotypeValue(gt_index);
-    gt_value->data_type = eGT;
-    gt_value->int_vector = &m_GT;
+    auto gt_value = alloc_genotype_value(gt_index);
+    gt_value->data_type = vcf_gt;
+    gt_value->int_vector = &gt;
     return true;
 }
 
-const char* CVCFScanner::x_ParseGT()
+const char* VCF_scanner::parse_gt()
 {
-    m_GT.clear();
+    gt.clear();
 
-    const std::string& token = m_Tokenizer.GetToken();
+    const std::string& token = tokenizer.get_token();
 
     size_t len = token.length();
 
@@ -539,7 +537,7 @@ const char* CVCFScanner::x_ParseGT()
 
     for (;; ++ptr, --len) {
         if (*ptr == '.') {
-            m_GT.push_back(-1);
+            gt.push_back(-1);
             ++ptr;
             --len;
         } else {
@@ -551,16 +549,16 @@ const char* CVCFScanner::x_ParseGT()
                 if (allele > (UINT_MAX / 10) ||
                         (allele == (UINT_MAX / 10) && digit > UINT_MAX % 10)) {
                     // TODO ERR+="in genotype info for the sample #" +
-                    //           str(m_CurrentGenotypeValueIndex)
+                    //           str(current_genotype_value_index)
                     return "Integer overflow in allele index";
                 }
 
                 allele = allele * 10 + digit;
             }
 
-            m_GT.push_back((int) allele);
+            gt.push_back((int) allele);
 
-            if (m_AllelesParsed && allele > m_Alts.size()) {
+            if (alleles_parsed && allele > alts.size()) {
                 return "Allele index exceeds the number of alleles";
             }
         }
@@ -569,10 +567,10 @@ const char* CVCFScanner::x_ParseGT()
         }
         switch (*ptr) {
         case '/':
-            m_PhasedGT = false;
+            phased_gt = false;
             continue;
         case '|':
-            m_PhasedGT = true;
+            phased_gt = true;
             continue;
         }
         break;
@@ -580,105 +578,102 @@ const char* CVCFScanner::x_ParseGT()
     return "Invalid character in GT value";
 }
 
-CVCFScanner::EParsingEvent CVCFScanner::ParseGenotype()
+VCF_scanner::Parsing_event VCF_scanner::parse_genotype()
 {
     // LCOV_EXCL_START
-    if (m_ParsingState != eGenotypes) {
+    if (state != parsing_genotypes) {
         assert(false &&
-                "ParseGenotypeFormat must be called before ParseGenotype");
-        return eError;
+                "parse_genotype_format must be called before parse_genotype");
+        return error;
     }
     // LCOV_EXCL_STOP
 
-    if (m_CurrentGenotypeFieldIndex >= m_Header.m_SampleIDs.size()) {
-        return x_DataLineError(
+    if (current_genotype_field_index >= header.sample_ids.size()) {
+        return data_line_error(
                 "The number of genotype fields exceeds the number of samples");
     }
 
-    m_CurrentGenotypeValueIndex = 0;
+    current_genotype_value_index = 0;
 
-    return x_ParseGenotype();
+    return continue_parsing_genotype();
 }
 
-CVCFScanner::EParsingEvent CVCFScanner::x_ParseGenotype()
+VCF_scanner::Parsing_event VCF_scanner::continue_parsing_genotype()
 {
-    SGenotypeValue* value =
-            m_GenotypeValues.data() + m_CurrentGenotypeValueIndex;
-
-    const char* error_message;
+    Genotype_value* value =
+            genotype_values.data() + current_genotype_value_index;
 
     do {
         if (value->flag == nullptr) {
-            if (!m_Tokenizer.SkipToken(m_Tokenizer.FindNewlineOrTabOrColon())) {
-                return eNeedMoreData;
+            if (!tokenizer.skip_token(
+                        tokenizer.find_newline_or_tab_or_colon())) {
+                return need_more_data;
             }
-            if (m_Tokenizer.TokenIsLast()) {
-                m_ParsingState = eEndOfDataLine;
-                return eOK;
+            if (tokenizer.token_is_last()) {
+                state = end_of_data_line;
+                return ok;
             }
         } else {
-            if (!m_Tokenizer.PrepareTokenOrAccumulate(
-                        m_Tokenizer.FindCharFromSet(
-                                m_Tokenizer.m_NewlineOrTabOrColon))) {
-                return eNeedMoreData;
+            if (!tokenizer.prepare_token_or_accumulate(
+                        tokenizer.find_char_from_set(
+                                tokenizer.newline_or_tab_or_colon))) {
+                return need_more_data;
             }
 
-            if (m_Tokenizer.TokenIsLast()) {
-                m_ParsingState = eEndOfDataLine;
+            if (tokenizer.token_is_last()) {
+                state = end_of_data_line;
             }
 
             switch (value->data_type) {
-            // TODO case eInteger:
-            // TODO case eFloat:
-            // TODO case eCharacter:
-            // TODO case eString:
-            case eGT:
-                error_message = x_ParseGT();
-                if (error_message != nullptr) {
-                    return x_DataLineError(error_message);
+            // TODO case vcf_integer:
+            // TODO case vcf_float:
+            // TODO case vcf_character:
+            // TODO case vcf_string:
+            case vcf_gt: {
+                const char* err_msg = parse_gt();
+                if (err_msg != nullptr) {
+                    return data_line_error(err_msg);
                 }
-                break;
-            default /* eFlag - impossible type for genotype info */:
+            } break;
+            default /* vcf_flag - impossible type for genotype info */:
                 break;
             }
 
-            if (m_Tokenizer.TokenIsLast()) {
-                return eOK;
+            if (tokenizer.token_is_last()) {
+                return ok;
             }
         }
 
-        if (m_Tokenizer.GetTokenTerm() == '\t') {
-            ++m_CurrentGenotypeFieldIndex;
-            return eOK;
+        if (tokenizer.get_terminator() == '\t') {
+            ++current_genotype_field_index;
+            return ok;
         }
 
         ++value;
-    } while (++m_CurrentGenotypeValueIndex <
-            m_GenotypeKeyPositions.number_of_positions);
+    } while (++current_genotype_value_index <
+            genotype_key_positions.number_of_positions);
 
-    return x_DataLineError("Too many genotype info fields");
+    return data_line_error("Too many genotype info fields");
 }
 
-CVCFScanner::EParsingEvent CVCFScanner::ClearLine()
+VCF_scanner::Parsing_event VCF_scanner::clear_line()
 {
-    if (!m_Tokenizer.AtEOF()) {
-        if (m_ParsingState != ePeekAfterEOL) {
-            if (m_ParsingState != eEndOfDataLine &&
-                    !m_Tokenizer.SkipToken(m_Tokenizer.FindNewline())) {
-                m_ParsingState = eClearLine;
-                return eNeedMoreData;
+    if (!tokenizer.at_eof()) {
+        if (state != peeking_beyond_newline) {
+            if (state != end_of_data_line &&
+                    !tokenizer.skip_token(tokenizer.find_newline())) {
+                state = skipping_to_next_line;
+                return need_more_data;
             }
 
-            if (m_Tokenizer.BufferIsEmpty()) {
-                m_ParsingState = ePeekAfterEOL;
-                return eNeedMoreData;
+            if (tokenizer.buffer_is_empty()) {
+                state = peeking_beyond_newline;
+                return need_more_data;
             }
         }
     }
 
-    x_ResetDataLine();
+    reset_data_line();
 
-    return eOK;
+    return ok;
 }
-
-} /* namespace vcf */

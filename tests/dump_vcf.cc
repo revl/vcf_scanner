@@ -3,49 +3,49 @@
 static char buffer[1];
 static size_t buffer_size;
 
-static void s_ReadBuffer(FILE* input)
+static void read_buffer(FILE* input)
 {
     buffer_size = fread(buffer, 1, sizeof(buffer), input);
 }
 
-static bool s_ParseToCompletion(vcf::CVCFScanner::EParsingEvent pe,
-        vcf::CVCFScanner& vcf_scanner, FILE* input)
+static bool parse_to_completion(
+        VCF_scanner::Parsing_event pe, VCF_scanner& vcf_scanner, FILE* input)
 {
-    while (pe == vcf::CVCFScanner::eNeedMoreData) {
-        s_ReadBuffer(input);
-        pe = vcf_scanner.Feed(buffer, buffer_size);
+    while (pe == VCF_scanner::need_more_data) {
+        read_buffer(input);
+        pe = vcf_scanner.feed(buffer, buffer_size);
     }
 
-    if (pe == vcf::CVCFScanner::eError) {
+    if (pe == VCF_scanner::error) {
         return false;
     }
 
-    if (pe == vcf::CVCFScanner::eOKWithWarnings) {
-        for (const auto& warning : vcf_scanner.GetWarnings())
+    if (pe == VCF_scanner::ok_with_warnings) {
+        for (const auto& warning : vcf_scanner.get_warnings())
             std::cerr << "Warning: " << warning.warning_message << std::endl;
     }
 
     return true;
 }
 
-static bool ParseDataLine(vcf::CVCFScanner& vcf_scanner, FILE* input)
+static bool parse_data_line(VCF_scanner& vcf_scanner, FILE* input)
 {
-    std::cout << vcf_scanner.GetLineNumber() << ':';
+    std::cout << vcf_scanner.get_line_number() << ':';
 
     const char* sep;
 
-    if (!s_ParseToCompletion(vcf_scanner.ParseLoc(), vcf_scanner, input)) {
+    if (!parse_to_completion(vcf_scanner.parse_loc(), vcf_scanner, input)) {
         return false;
     }
-    std::cout << vcf_scanner.GetChrom() << '\t' << vcf_scanner.GetPos();
+    std::cout << vcf_scanner.get_chrom() << '\t' << vcf_scanner.get_pos();
 
     std::vector<std::string> ids;
-    if (!s_ParseToCompletion(vcf_scanner.ParseIDs(), vcf_scanner, input)) {
+    if (!parse_to_completion(vcf_scanner.parse_ids(), vcf_scanner, input)) {
         return false;
     }
-    if (!vcf_scanner.GetIDs().empty()) {
+    if (!vcf_scanner.get_ids().empty()) {
         sep = "\t";
-        for (const auto& id : vcf_scanner.GetIDs()) {
+        for (const auto& id : vcf_scanner.get_ids()) {
             std::cout << sep << id;
             sep = ",";
         }
@@ -53,13 +53,13 @@ static bool ParseDataLine(vcf::CVCFScanner& vcf_scanner, FILE* input)
     } else
         std::cout << "\t.\t";
 
-    if (!s_ParseToCompletion(vcf_scanner.ParseAlleles(), vcf_scanner, input)) {
+    if (!parse_to_completion(vcf_scanner.parse_alleles(), vcf_scanner, input)) {
         return false;
     }
-    std::cout << vcf_scanner.GetRef();
-    if (!vcf_scanner.GetAlts().empty()) {
+    std::cout << vcf_scanner.get_ref();
+    if (!vcf_scanner.get_alts().empty()) {
         sep = "\t";
-        for (const auto& alt : vcf_scanner.GetAlts()) {
+        for (const auto& alt : vcf_scanner.get_alts()) {
             std::cout << sep << alt;
             sep = ",";
         }
@@ -67,33 +67,33 @@ static bool ParseDataLine(vcf::CVCFScanner& vcf_scanner, FILE* input)
     } else
         std::cout << "\t.\t";
 
-    if (!s_ParseToCompletion(vcf_scanner.ParseQuality(), vcf_scanner, input)) {
+    if (!parse_to_completion(vcf_scanner.parse_quality(), vcf_scanner, input)) {
         return false;
     }
-    std::string quality = vcf_scanner.GetQuality();
+    std::string quality = vcf_scanner.get_quality();
     if (!quality.empty())
         std::cout << quality;
     else
         std::cout << ".";
 
-    if (!s_ParseToCompletion(vcf_scanner.ParseFilters(), vcf_scanner, input)) {
+    if (!parse_to_completion(vcf_scanner.parse_filters(), vcf_scanner, input)) {
         return false;
     }
-    if (!vcf_scanner.GetFilters().empty()) {
+    if (!vcf_scanner.get_filters().empty()) {
         sep = "\t";
-        for (const auto& filter : vcf_scanner.GetFilters()) {
+        for (const auto& filter : vcf_scanner.get_filters()) {
             std::cout << sep << filter;
             sep = ";";
         }
     } else
         std::cout << "\t.";
 
-    if (!s_ParseToCompletion(vcf_scanner.ParseInfo(), vcf_scanner, input)) {
+    if (!parse_to_completion(vcf_scanner.parse_info(), vcf_scanner, input)) {
         return false;
     }
-    if (!vcf_scanner.GetInfo().empty()) {
+    if (!vcf_scanner.get_info().empty()) {
         sep = "\t";
-        for (const auto& info_item : vcf_scanner.GetInfo()) {
+        for (const auto& info_item : vcf_scanner.get_info()) {
             std::cout << sep << info_item;
             sep = ";";
         }
@@ -101,13 +101,13 @@ static bool ParseDataLine(vcf::CVCFScanner& vcf_scanner, FILE* input)
     } else
         std::cout << "\t.\t";
 
-    if (vcf_scanner.GetHeader().HasGenotypeInfo()) {
-        if (!s_ParseToCompletion(
-                    vcf_scanner.ParseGenotypeFormat(), vcf_scanner, input)) {
+    if (vcf_scanner.get_header().has_genotype_info()) {
+        if (!parse_to_completion(
+                    vcf_scanner.parse_genotype_format(), vcf_scanner, input)) {
             return false;
         }
 
-        if (!vcf_scanner.CaptureGT()) {
+        if (!vcf_scanner.capture_gt()) {
             std::cout << std::endl;
             std::cout << "\tERR: no GT key" << std::endl;
             return true;
@@ -115,15 +115,15 @@ static bool ParseDataLine(vcf::CVCFScanner& vcf_scanner, FILE* input)
 
         std::cout << "GT";
 
-        while (vcf_scanner.GenotypeAvailable()) {
-            if (!s_ParseToCompletion(
-                        vcf_scanner.ParseGenotype(), vcf_scanner, input)) {
+        while (vcf_scanner.genotype_available()) {
+            if (!parse_to_completion(
+                        vcf_scanner.parse_genotype(), vcf_scanner, input)) {
                 return false;
             }
             sep = "\t";
-            for (auto allele : vcf_scanner.GetGT()) {
+            for (auto allele : vcf_scanner.get_gt()) {
                 std::cout << sep << allele;
-                sep = vcf_scanner.IsPhasedGT() ? "|" : "/";
+                sep = vcf_scanner.is_phased_gt() ? "|" : "/";
             }
         }
     }
@@ -146,50 +146,51 @@ int main(int argc, const char* argv[])
         return 1;
     }
 
-    vcf::CVCFScanner vcf_scanner;
+    VCF_scanner vcf_scanner;
 
-    vcf::CVCFScanner::EParsingEvent pe;
+    VCF_scanner::Parsing_event pe;
 
     // Read the header
     do
-        s_ReadBuffer(input);
-    while ((pe = vcf_scanner.Feed(buffer, buffer_size)) ==
-            vcf::CVCFScanner::eNeedMoreData);
+        read_buffer(input);
+    while ((pe = vcf_scanner.feed(buffer, buffer_size)) ==
+            VCF_scanner::need_more_data);
 
-    if (pe != vcf::CVCFScanner::eOK) {
-        std::cerr << vcf_scanner.GetError() << std::endl;
+    if (pe != VCF_scanner::ok) {
+        std::cerr << vcf_scanner.get_error() << std::endl;
         return 1;
     }
 
-    if (pe == vcf::CVCFScanner::eOKWithWarnings) {
-        for (const auto& warning : vcf_scanner.GetWarnings())
+    if (pe == VCF_scanner::ok_with_warnings) {
+        for (const auto& warning : vcf_scanner.get_warnings())
             std::cerr << "Warning: " << warning.warning_message << std::endl;
-        pe = vcf::CVCFScanner::eOK;
+        pe = VCF_scanner::ok;
     }
 
-    std::cout << "##fileformat=" << vcf_scanner.GetHeader().GetFileFormat()
+    std::cout << "##fileformat="
+              << vcf_scanner.get_header().get_file_format_version()
               << std::endl;
 
-    for (const auto& kv : vcf_scanner.GetHeader().GetMetaInfo()) {
+    for (const auto& kv : vcf_scanner.get_header().get_meta_info()) {
         for (const auto& v : kv.second) {
             std::cout << "##" << kv.first << '=' << v << std::endl;
         }
     }
 
     std::cout << "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT";
-    for (const auto& v : vcf_scanner.GetHeader().GetSampleIDs()) {
+    for (const auto& v : vcf_scanner.get_header().get_sample_ids()) {
         std::cout << '\t' << v;
     }
     std::cout << std::endl;
 
-    while (!vcf_scanner.AtEOF()) {
-        if (!ParseDataLine(vcf_scanner, input)) {
+    while (!vcf_scanner.at_eof()) {
+        if (!parse_data_line(vcf_scanner, input)) {
             std::cout << std::endl;
-            std::cerr << "<-ERR@" << vcf_scanner.GetLineNumber() << ": "
-                      << vcf_scanner.GetError() << std::endl;
+            std::cerr << "<-ERR@" << vcf_scanner.get_line_number() << ": "
+                      << vcf_scanner.get_error() << std::endl;
         }
 
-        s_ParseToCompletion(vcf_scanner.ClearLine(), vcf_scanner, input);
+        parse_to_completion(vcf_scanner.clear_line(), vcf_scanner, input);
     }
 
     return 0;

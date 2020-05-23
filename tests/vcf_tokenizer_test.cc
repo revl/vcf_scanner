@@ -6,237 +6,248 @@ TEST_CASE(newline_no_newline)
 {
     static const char test_data[] = "two\nlines";
 
-    vcf::CVCFTokenizer tokenizer;
+    VCF_tokenizer tokenizer;
 
     // Start with a non-empty buffer
-    tokenizer.SetNewBuffer(test_data, sizeof(test_data) - 1);
-    CHECK(tokenizer.GetLineNumber() == 1);
+    tokenizer.set_new_buffer(test_data, sizeof(test_data) - 1);
+    CHECK(tokenizer.get_line_number() == 1);
 
-    CHECK(!tokenizer.BufferIsEmpty());
-    CHECK(!tokenizer.AtEOF());
+    CHECK(!tokenizer.buffer_is_empty());
+    CHECK(!tokenizer.at_eof());
 
     // Find the newline character
-    const char* newline = tokenizer.FindNewline();
+    const char* newline = tokenizer.find_newline();
     REQUIRE(newline != nullptr);
 
     // Extract the token before the newline
-    REQUIRE(tokenizer.PrepareTokenOrAccumulate(newline));
-    CHECK(tokenizer.GetToken() == "two");
-    CHECK(tokenizer.GetTokenTerm() == '\n');
+    REQUIRE(tokenizer.prepare_token_or_accumulate(newline));
+    CHECK(tokenizer.get_token() == "two");
+    CHECK(tokenizer.get_terminator() == '\n');
 
     // The second line has started
-    CHECK(tokenizer.GetLineNumber() == 2);
+    CHECK(tokenizer.get_line_number() == 2);
 
     // Confirm that there is no second newline
-    newline = tokenizer.FindNewline();
+    newline = tokenizer.find_newline();
     REQUIRE(newline == nullptr);
-    REQUIRE(!tokenizer.PrepareTokenOrAccumulate(newline));
+    REQUIRE(!tokenizer.prepare_token_or_accumulate(newline));
 
     // It is unknown whether EOF has been reached
-    CHECK(!tokenizer.AtEOF());
+    CHECK(!tokenizer.at_eof());
     // The buffer is exhausted but the previous token
     // is not overwritten
-    CHECK(tokenizer.GetToken() == "two");
-    CHECK(tokenizer.GetTokenTerm() == '\n');
+    CHECK(tokenizer.get_token() == "two");
+    CHECK(tokenizer.get_terminator() == '\n');
 
     // Simulate EOF condition
-    tokenizer.SetNewBuffer("", 0);
+    tokenizer.set_new_buffer("", 0);
 
     // The buffer is still empty
-    CHECK(tokenizer.BufferIsEmpty());
+    CHECK(tokenizer.buffer_is_empty());
     // And EOF condition is recognized
-    CHECK(tokenizer.AtEOF());
+    CHECK(tokenizer.at_eof());
 
-    newline = tokenizer.FindNewline();
+    newline = tokenizer.find_newline();
     REQUIRE(newline == nullptr);
-    REQUIRE(tokenizer.PrepareTokenOrAccumulate(newline));
+    REQUIRE(tokenizer.prepare_token_or_accumulate(newline));
 
-    CHECK(tokenizer.GetToken() == "lines");
-    CHECK(tokenizer.GetTokenTerm() == EOF);
+    CHECK(tokenizer.get_token() == "lines");
+    CHECK(tokenizer.get_terminator() == EOF);
 }
 
 TEST_CASE(skipping)
 {
     static const char test_data[] = "1\n2";
 
-    vcf::CVCFTokenizer tokenizer;
+    VCF_tokenizer tokenizer;
 
-    tokenizer.SetNewBuffer(test_data, sizeof(test_data) - 1);
-    CHECK(tokenizer.GetLineNumber() == 1);
+    tokenizer.set_new_buffer(test_data, sizeof(test_data) - 1);
+    CHECK(tokenizer.get_line_number() == 1);
 
-    CHECK(!tokenizer.BufferIsEmpty());
-    CHECK(!tokenizer.AtEOF());
+    CHECK(!tokenizer.buffer_is_empty());
+    CHECK(!tokenizer.at_eof());
 
     // Find the first newline character
-    const char* newline = tokenizer.FindNewline();
+    const char* newline = tokenizer.find_newline();
     REQUIRE(newline != nullptr);
 
     // Skip the first line
-    REQUIRE(tokenizer.SkipToken(newline));
-    CHECK(tokenizer.GetTokenTerm() == '\n');
+    REQUIRE(tokenizer.skip_token(newline));
+    CHECK(tokenizer.get_terminator() == '\n');
 
     // The second line has started
-    CHECK(tokenizer.GetLineNumber() == 2);
+    CHECK(tokenizer.get_line_number() == 2);
 
     // Confirm that there is no second newline
-    newline = tokenizer.FindNewline();
+    newline = tokenizer.find_newline();
     REQUIRE(newline == nullptr);
-    REQUIRE(!tokenizer.SkipToken(newline));
+    REQUIRE(!tokenizer.skip_token(newline));
 
     // It is unknown whether EOF has been reached
-    CHECK(!tokenizer.AtEOF());
-    CHECK(tokenizer.GetTokenTerm() == '\n');
+    CHECK(!tokenizer.at_eof());
+    CHECK(tokenizer.get_terminator() == '\n');
 
     // Simulate EOF condition
-    tokenizer.SetNewBuffer("", 0);
-    newline = tokenizer.FindNewline();
+    tokenizer.set_new_buffer("", 0);
+    newline = tokenizer.find_newline();
     REQUIRE(newline == nullptr);
-    REQUIRE(tokenizer.SkipToken(newline));
+    REQUIRE(tokenizer.skip_token(newline));
 
-    CHECK(tokenizer.GetTokenTerm() == EOF);
+    CHECK(tokenizer.get_terminator() == EOF);
 }
 
 TEST_CASE(empty_token)
 {
-    vcf::CVCFTokenizer tokenizer;
+    VCF_tokenizer tokenizer;
 
-    tokenizer.SetNewBuffer("\t\n", 2);
+    tokenizer.set_new_buffer("\t\n", 2);
 
-    REQUIRE(tokenizer.PrepareTokenOrAccumulate(tokenizer.FindNewlineOrTab()));
-    CHECK(tokenizer.GetToken().empty());
+    REQUIRE(tokenizer.prepare_token_or_accumulate(
+            tokenizer.find_newline_or_tab()));
+    CHECK(tokenizer.get_token().empty());
 
-    REQUIRE(tokenizer.PrepareTokenOrAccumulate(tokenizer.FindNewlineOrTab()));
-    CHECK(tokenizer.GetToken().empty());
+    REQUIRE(tokenizer.prepare_token_or_accumulate(
+            tokenizer.find_newline_or_tab()));
+    CHECK(tokenizer.get_token().empty());
 }
 
-static std::string s_Stitch3(vcf::CVCFTokenizer& tokenizer,
-        const std::string& part1, const std::string& part2,
-        const std::string& part3)
+static std::string stitch3(VCF_tokenizer& tokenizer, const std::string& part1,
+        const std::string& part2, const std::string& part3)
 {
-    tokenizer.SetNewBuffer(part1.data(), part1.length());
-    REQUIRE(!tokenizer.PrepareTokenOrAccumulate(tokenizer.FindNewlineOrTab()));
+    tokenizer.set_new_buffer(part1.data(), part1.length());
+    REQUIRE(!tokenizer.prepare_token_or_accumulate(
+            tokenizer.find_newline_or_tab()));
 
-    tokenizer.SetNewBuffer(part2.data(), part2.length());
-    REQUIRE(!tokenizer.PrepareTokenOrAccumulate(tokenizer.FindNewlineOrTab()));
+    tokenizer.set_new_buffer(part2.data(), part2.length());
+    REQUIRE(!tokenizer.prepare_token_or_accumulate(
+            tokenizer.find_newline_or_tab()));
 
-    tokenizer.SetNewBuffer(part3.data(), part3.length());
-    REQUIRE(tokenizer.PrepareTokenOrAccumulate(tokenizer.FindNewlineOrTab()));
+    tokenizer.set_new_buffer(part3.data(), part3.length());
+    REQUIRE(tokenizer.prepare_token_or_accumulate(
+            tokenizer.find_newline_or_tab()));
 
-    return tokenizer.GetToken();
+    return tokenizer.get_token();
 }
 
 TEST_CASE(seams)
 {
-    vcf::CVCFTokenizer tokenizer;
+    VCF_tokenizer tokenizer;
 
-    tokenizer.SetNewBuffer("", 0);
-    REQUIRE(tokenizer.PrepareTokenOrAccumulate(tokenizer.FindNewlineOrTab()));
-    CHECK(tokenizer.GetToken().empty());
+    tokenizer.set_new_buffer("", 0);
+    REQUIRE(tokenizer.prepare_token_or_accumulate(
+            tokenizer.find_newline_or_tab()));
+    CHECK(tokenizer.get_token().empty());
 
-    CHECK(s_Stitch3(tokenizer, "heads ", "and", " tails\n") ==
+    CHECK(stitch3(tokenizer, "heads ", "and", " tails\n") == "heads and tails");
+    CHECK(stitch3(tokenizer, "heads ", "and", " tails\r\n") ==
             "heads and tails");
-    CHECK(s_Stitch3(tokenizer, "heads ", "and", " tails\r\n") ==
-            "heads and tails");
-    CHECK(s_Stitch3(tokenizer, "grid", "lock\r", "\n") == "gridlock");
-    CHECK(s_Stitch3(tokenizer, "grid", "lock", "") == "gridlock");
+    CHECK(stitch3(tokenizer, "grid", "lock\r", "\n") == "gridlock");
+    CHECK(stitch3(tokenizer, "grid", "lock", "") == "gridlock");
 }
 
 TEST_CASE(key_value)
 {
-    vcf::CVCFTokenizer tokenizer;
+    VCF_tokenizer tokenizer;
 
-    CTempString k, v;
+    VCF_string_view k, v;
 
     static const char kv[] = "key=value\nnokeyvalue\n";
-    tokenizer.SetNewBuffer(kv, sizeof(kv) - 1);
-    REQUIRE(tokenizer.PrepareTokenOrAccumulate(tokenizer.FindNewlineOrTab()));
+    tokenizer.set_new_buffer(kv, sizeof(kv) - 1);
+    REQUIRE(tokenizer.prepare_token_or_accumulate(
+            tokenizer.find_newline_or_tab()));
 
-    REQUIRE(tokenizer.GetKeyValue(&k, &v));
+    REQUIRE(tokenizer.get_key_value(&k, &v));
     CHECK(k == "key" && v == "value");
 
     k.clear();
     v.clear();
-    REQUIRE(tokenizer.GetKeyValue(nullptr, &v));
+    REQUIRE(tokenizer.get_key_value(nullptr, &v));
     CHECK(v == "value");
     v.clear();
-    REQUIRE(tokenizer.GetKeyValue(&k, nullptr));
+    REQUIRE(tokenizer.get_key_value(&k, nullptr));
     CHECK(k == "key");
 
-    REQUIRE(tokenizer.PrepareTokenOrAccumulate(tokenizer.FindNewlineOrTab()));
-    REQUIRE(!tokenizer.GetKeyValue(&k, &v));
+    REQUIRE(tokenizer.prepare_token_or_accumulate(
+            tokenizer.find_newline_or_tab()));
+    REQUIRE(!tokenizer.get_key_value(&k, &v));
 }
 
 TEST_CASE(parse_unsigned_int)
 {
-    vcf::CVCFTokenizer tokenizer;
+    VCF_tokenizer tokenizer;
 
     static const char two_numbers[] = "\t12345-6789";
-    tokenizer.SetNewBuffer(two_numbers, sizeof(two_numbers) - 1);
+    tokenizer.set_new_buffer(two_numbers, sizeof(two_numbers) - 1);
 
-    REQUIRE(tokenizer.PrepareTokenOrAccumulate(tokenizer.FindNewlineOrTab()));
+    REQUIRE(tokenizer.prepare_token_or_accumulate(
+            tokenizer.find_newline_or_tab()));
 
     unsigned number = 0, number_len = 0;
-    REQUIRE(tokenizer.ParseUnsignedInt(&number, &number_len) ==
-            vcf::CVCFTokenizer::eEndOfNumber);
+    REQUIRE(tokenizer.parse_uint(&number, &number_len) ==
+            VCF_tokenizer::end_of_number);
     CHECK(number == 12345 && number_len == 5);
-    CHECK(tokenizer.GetTokenTerm() == '-');
+    CHECK(tokenizer.get_terminator() == '-');
 
     number = number_len = 0;
-    REQUIRE(tokenizer.ParseUnsignedInt(&number, &number_len) ==
-            vcf::CVCFTokenizer::eEndOfBuffer);
+    REQUIRE(tokenizer.parse_uint(&number, &number_len) ==
+            VCF_tokenizer::end_of_buffer);
     CHECK(number == 6789 && number_len == 4);
 
     number = number_len = 0;
-    REQUIRE(tokenizer.ParseUnsignedInt(&number, &number_len) ==
-            vcf::CVCFTokenizer::eEndOfBuffer);
+    REQUIRE(tokenizer.parse_uint(&number, &number_len) ==
+            VCF_tokenizer::end_of_buffer);
     CHECK(number == 0 && number_len == 0);
 
     static const char overflow[] = "4294967296";
-    tokenizer.SetNewBuffer(overflow, sizeof(overflow) - 1);
+    tokenizer.set_new_buffer(overflow, sizeof(overflow) - 1);
     number = number_len = 0;
-    REQUIRE(tokenizer.ParseUnsignedInt(&number, &number_len) ==
-            vcf::CVCFTokenizer::eIntegerOverflow);
+    REQUIRE(tokenizer.parse_uint(&number, &number_len) ==
+            VCF_tokenizer::integer_overflow);
 
-    tokenizer.SetNewBuffer("", 0);
+    tokenizer.set_new_buffer("", 0);
     number = number_len = 0;
-    REQUIRE(tokenizer.ParseUnsignedInt(&number, &number_len) ==
-            vcf::CVCFTokenizer::eEndOfNumber);
+    REQUIRE(tokenizer.parse_uint(&number, &number_len) ==
+            VCF_tokenizer::end_of_number);
     CHECK(number == 0 && number_len == 0);
 
     static const char test_data[] = "123456789\n4294967296\n\n100X\n";
-    tokenizer.SetNewBuffer(test_data, sizeof(test_data) - 1);
+    tokenizer.set_new_buffer(test_data, sizeof(test_data) - 1);
 
-    REQUIRE(tokenizer.PrepareTokenOrAccumulate(tokenizer.FindNewlineOrTab()));
-    REQUIRE(tokenizer.GetTokenAsUInt(&number));
+    REQUIRE(tokenizer.prepare_token_or_accumulate(
+            tokenizer.find_newline_or_tab()));
+    REQUIRE(tokenizer.get_token_as_uint(&number));
     CHECK(number == 123456789);
 
-    REQUIRE(tokenizer.PrepareTokenOrAccumulate(tokenizer.FindNewlineOrTab()));
-    CHECK(!tokenizer.GetTokenAsUInt(&number));
+    REQUIRE(tokenizer.prepare_token_or_accumulate(
+            tokenizer.find_newline_or_tab()));
+    CHECK(!tokenizer.get_token_as_uint(&number));
 
-    REQUIRE(tokenizer.PrepareTokenOrAccumulate(tokenizer.FindNewlineOrTab()));
-    CHECK(!tokenizer.GetTokenAsUInt(&number));
+    REQUIRE(tokenizer.prepare_token_or_accumulate(
+            tokenizer.find_newline_or_tab()));
+    CHECK(!tokenizer.get_token_as_uint(&number));
 
-    REQUIRE(tokenizer.PrepareTokenOrAccumulate(tokenizer.FindNewlineOrTab()));
-    CHECK(!tokenizer.GetTokenAsUInt(&number));
+    REQUIRE(tokenizer.prepare_token_or_accumulate(
+            tokenizer.find_newline_or_tab()));
+    CHECK(!tokenizer.get_token_as_uint(&number));
 }
 
 TEST_CASE(simple_checks)
 {
-    vcf::CVCFTokenizer tokenizer;
+    VCF_tokenizer tokenizer;
 
     static const char test_data[] = ".\n. \n";
-    tokenizer.SetNewBuffer(test_data, sizeof(test_data) - 1);
-    REQUIRE(tokenizer.PrepareTokenOrAccumulate(tokenizer.FindNewline()));
+    tokenizer.set_new_buffer(test_data, sizeof(test_data) - 1);
+    REQUIRE(tokenizer.prepare_token_or_accumulate(tokenizer.find_newline()));
 
-    CHECK(tokenizer.GetToken() == ".");
-    CHECK(tokenizer.TokenIsDot());
-    CHECK(tokenizer.TokenIsLast());
+    CHECK(tokenizer.get_token() == ".");
+    CHECK(tokenizer.token_is_dot());
+    CHECK(tokenizer.token_is_last());
 
-    REQUIRE(tokenizer.PrepareTokenOrAccumulate(tokenizer.FindNewline()));
-    CHECK(!tokenizer.TokenIsDot());
-    CHECK(tokenizer.TokenIsLast());
+    REQUIRE(tokenizer.prepare_token_or_accumulate(tokenizer.find_newline()));
+    CHECK(!tokenizer.token_is_dot());
+    CHECK(tokenizer.token_is_last());
 
-    tokenizer.SetNewBuffer(test_data, sizeof(test_data) - 1);
-    REQUIRE(tokenizer.PrepareTokenOrAccumulate(tokenizer.FindNewline()));
-    CHECK(tokenizer.TokenIsLast());
+    tokenizer.set_new_buffer(test_data, sizeof(test_data) - 1);
+    REQUIRE(tokenizer.prepare_token_or_accumulate(tokenizer.find_newline()));
+    CHECK(tokenizer.token_is_last());
 }

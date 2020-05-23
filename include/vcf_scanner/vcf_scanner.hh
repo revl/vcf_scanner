@@ -36,353 +36,350 @@
 
 #include "impl/vcf_tokenizer.hh"
 
-namespace vcf {
+class VCF_scanner;
 
-class CVCFScanner;
-
-// CVCFHeader contains information extracted from the VCF header.
-class CVCFHeader
+// Metadata extracted from the VCF header.
+class VCF_header
 {
 public:
-    typedef std::vector<std::string> TMetaInfoLines;
-    typedef std::map<std::string, TMetaInfoLines> TMetaInfo;
-    typedef std::vector<std::string> TSampleIDs;
+    typedef std::vector<std::string> Meta_info_lines;
+    typedef std::map<std::string, Meta_info_lines> Meta_info;
+    typedef std::vector<std::string> Sample_IDs;
 
-    // GetFileFormat returns the file format version.
-    const std::string& GetFileFormat() const
+    // Returns the VCF version of the current input file.
+    const std::string& get_file_format_version() const
     {
-        return m_FileFormat;
+        return file_format_version;
     }
 
-    const TMetaInfo& GetMetaInfo() const
+    const Meta_info& get_meta_info() const
     {
-        return m_MetaInfo;
+        return meta_info;
     }
 
-    bool HasGenotypeInfo() const
+    bool has_genotype_info() const
     {
-        return m_GenotypeInfoPresent;
+        return genotype_info_present;
     }
 
-    const TSampleIDs& GetSampleIDs() const
+    const Sample_IDs& get_sample_ids() const
     {
-        return m_SampleIDs;
+        return sample_ids;
     }
 
 private:
-    std::string m_FileFormat;
-    TMetaInfo m_MetaInfo;
-    bool m_GenotypeInfoPresent = false;
-    TSampleIDs m_SampleIDs;
+    std::string file_format_version;
+    Meta_info meta_info;
+    bool genotype_info_present = false;
+    Sample_IDs sample_ids;
 
-    friend class CVCFScanner;
+    friend class VCF_scanner;
 };
 
-struct CVCFWarning {
-    unsigned line_number;
-    std::string warning_message;
-};
-
-// CVCFScanner parses VCF (Variant Call Format) files.
+// Parser of VCF (Variant Call Format) files.
 //
-// First, CVCFScanner parses the header in its entirety,
-// and then it parses data lines one by one.
+// This class parses and returns the header first, and then it parses
+// data lines one by one.
 //
 // All header information is kept by the parser in its member variables.
 // That includes sample IDs from the header line.
 //
 // The fields of the data lines, however, are never stored internally.
-// CVCFScanner is merely a tokenizer. Each data line field is discarded
-// as soon as the caller proceeds to parsing the next field.
+// This class does not store the parsed data. Each data line field is
+// discarded as soon as the caller proceeds to parsing the next field.
 //
-// CVCFScanner does not have a stream reading loop inside. It relies on
+// The parser does not have a stream reading loop inside. It relies on
 // the client code to provide the input data. As a result, it never blocks
 // on I/O operations. This allows for using a separate thread to read data
 // into a new buffer while the main thread is parsing a previously read
 // buffer. Alternatively to reading the input file into memory, the whole
 // file can be memory-mapped.
 //
-// Before parsing begins, or when a parsing function returns eNeedMoreData,
+// Before parsing begins, or when a parsing function returns 'need_more_data',
 // a new buffer with input data must be supplied to the parser by calling
-// Feed(). The buffer must not be freed or overwritten until eNeedMoreData
+// feed(). The buffer must not be freed or overwritten until 'need_more_data'
 // is received again or the client code chooses not to continue parsing.
-class CVCFScanner
+class VCF_scanner
 {
 public:
-    CVCFScanner() {}
+    VCF_scanner() = default;
 
-    enum EParsingEvent {
-        eNeedMoreData, // The parser needs a new input buffer to
-                       // continue parsing.
+    enum Parsing_event {
+        need_more_data, // The parser needs a new input buffer to
+                        // continue parsing. See feed().
 
-        eOK, // The current token (the VCF header or a data field) has
-             // been successfully parsed. Header meta-information or
-             // the data field value is now available for retrieval.
+        ok, // The current token (the VCF header or a data field) has
+            // been successfully parsed. Header meta-information or
+            // the data field value is now available for retrieval.
 
-        eOKWithWarnings, // The token has been successfully parsed, but
-                         // parser encountered issues during parsing. Use
-                         // GetWarnings() to retrieve the warning messages.
+        ok_with_warnings, // The token has been successfully parsed, but
+                          // parser encountered issues during parsing. Use
+                          // GetWarnings() to retrieve the warning messages.
 
-        eError // A parsing error has occurred. Use GetError() to get
-               // the error report.
-               //
-               // If the error happened while parsing the VCF header,
-               // this parser instance can no longer be used.
-               //
-               // If the error happened while parsing a data line, there
-               // is an option to ignore it and skip to the next line
-               // by calling ClearLine().
+        error // A parsing error has occurred. Use get_error() to get
+              // the error message.
+              //
+              // If the error happened while parsing the VCF header,
+              // this parser instance can no longer be used.
+              //
+              // If the error happened while parsing a data line, there
+              // is an option to ignore it and skip to the next line
+              // by calling clear_line().
     };
 
-    // Feed supplies a chunk of input data to this parser either
+    // Supplies a chunk of input data to this parser either
     // when the parser has just been created and is in the process
     // of parsing the VCF header or when a previously called method
-    // returned eNeedMoreData.
+    // returned 'need_more_data'.
     //
     // The parser stores the buffer pointer internally. Freeing the
-    // buffer before the parser returns eNeedMoreData from any of its
+    // buffer before the parser returns 'need_more_data' from any of its
     // methods will cause a segmentation fault. A buffer of zero size
     // is treated as an EOF condition.
     //
-    // Feed resumes parsing of the previously requested token and
+    // The method resumes parsing of the previously requested token and
     // returns eOK when the entire token has been parsed.
-    EParsingEvent Feed(const char* buffer, ssize_t buffer_size);
+    Parsing_event feed(const char* buffer, ssize_t buffer_size);
 
-    // GetLineNumber returns the current line number in the
-    // input VCF file before parsing the next token. The line
-    // number will increase after the last token on the current
-    // line has been parsed. The returned value is one-based.
-    unsigned GetLineNumber() const
+    // Returns the current line number in the input VCF file before
+    // parsing the next token. The line number will increase after the
+    // last token on the current line has been parsed. The returned value
+    // is one-based.
+    unsigned get_line_number() const
     {
-        return m_Tokenizer.GetLineNumber();
+        return tokenizer.get_line_number();
     }
 
-    std::vector<CVCFWarning> GetWarnings() const
+    struct Warning {
+        unsigned line_number;
+        std::string warning_message;
+    };
+
+    std::vector<Warning> get_warnings() const
     {
-        return m_Warnings;
+        return warnings;
     }
 
-    std::string GetError() const
+    std::string get_error() const
     {
-        return m_ErrorReport;
+        return error_message;
     }
 
-    // GetHeader returns the VCF header, which becomes available
+    // Returns the VCF header, which becomes available
     // once the last of the initial series of calls to Feed
     // returns eOK.
-    const CVCFHeader& GetHeader() const
+    const VCF_header& get_header() const
     {
-        return m_Header;
+        return header;
     }
 
-    // AtEOF returns true if the entire input stream has been
+    // Returns true if the entire input stream has been
     // successfully parsed. The method returns false if the
     // VCF file has at least one more data line to parse.
-    bool AtEOF() const
+    bool at_eof() const
     {
-        return m_Tokenizer.AtEOF();
+        return tokenizer.at_eof();
     }
 
-    // ParseLoc parses the CHROM and the POS fields.
-    EParsingEvent ParseLoc();
-    // GetChrom returns the CHROM field parsed by ParseLoc.
-    const std::string& GetChrom() const
+    // Parses the CHROM and the POS fields.
+    Parsing_event parse_loc();
+    // Returns the CHROM field parsed by parse_loc.
+    const std::string& get_chrom() const
     {
-        return m_Chrom;
+        return chrom;
     }
-    // GetPos returns the POS field parsed by ParseLoc.
-    unsigned GetPos() const
+    // Returns the POS field parsed by parse_loc.
+    unsigned get_pos() const
     {
-        return m_Pos;
-    }
-
-    // ParseIDs parses the ID field.
-    EParsingEvent ParseIDs();
-    // GetID returns the IDs parsed by ParseIDs.
-    const std::vector<std::string>& GetIDs() const
-    {
-        return m_IDs;
+        return pos;
     }
 
-    // ParseRef parses the REF and the ALT fields.
-    EParsingEvent ParseAlleles();
-    // GetRef returns the REF field parsed by ParseAlleles.
-    const std::string& GetRef() const
+    // Parses the ID field.
+    Parsing_event parse_ids();
+    // Returns the IDs parsed by parse_ids().
+    const std::vector<std::string>& get_ids() const
     {
-        return m_Ref;
-    }
-    // GetAlts returns the ALT field parsed by ParseAlleles.
-    const std::vector<std::string>& GetAlts() const
-    {
-        return m_Alts;
+        return ids;
     }
 
-    // ParseQuality parses the QUAL field.
-    EParsingEvent ParseQuality();
-    // GetQuality returns the QUAL field parsed by ParseQuality.
-    std::string GetQuality() const
+    // Parses the REF and the ALT fields.
+    Parsing_event parse_alleles();
+    // Returns the REF field parsed by parse_alleles.
+    const std::string& get_ref() const
     {
-        return m_Quality;
+        return ref;
+    }
+    // Returns the ALT field parsed by parse_alleles().
+    const std::vector<std::string>& get_alts() const
+    {
+        return alts;
     }
 
-    // ParseFilters parses the FILTER field.
-    EParsingEvent ParseFilters();
-    // GetFilter returns the FILTER field parsed by ParseFilters.
+    // Parses the QUAL field.
+    Parsing_event parse_quality();
+    // Returns the QUAL field parsed by parse_quality().
+    std::string get_quality() const
+    {
+        return quality;
+    }
+
+    // Parses the FILTER field.
+    Parsing_event parse_filters();
+    // Returns the FILTER field parsed by parse_filters().
     // The word "PASS" is returned when the current record passed
     // all filters.
-    const std::vector<std::string>& GetFilters() const
+    const std::vector<std::string>& get_filters() const
     {
-        return m_Filters;
+        return filters;
     }
 
-    // ParseInfo parses the INFO key-value pairs.
-    EParsingEvent ParseInfo();
-    // GetInfo returns the INFO field parsed by ParseInfo.
-    const std::vector<std::string>& GetInfo() const
+    // Parses the INFO key-value pairs.
+    Parsing_event parse_info();
+    // Returns the INFO field parsed by parse_info().
+    const std::vector<std::string>& get_info() const
     {
-        return m_Info;
+        return info;
     }
 
-    // ParseGenotypeFormat parses the genotype format keys.
-    EParsingEvent ParseGenotypeFormat();
+    // Parses the genotype format keys.
+    Parsing_event parse_genotype_format();
 
-    // GetGenotypeFormat returns the FORMAT field parsed by
-    // ParseGenotypeFormat.
-    // TODO const TGenotypeFormat& GetGenotypeFormat() const;
+    // Returns the FORMAT field parsed by parse_genotype_format().
+    // TODO const TGenotypeFormat& get_genotype_format() const;
 
-    // CaptureGT enables parsing of GT values in the ParseGenotype method.
-    // CaptureGT returns false and does nothing if the GT key was not
+    // Enables parsing of GT values in the parse_genotype method.
+    // Returns false and does nothing if the GT key was not
     // specified in the FORMAT field.
-    bool CaptureGT();
+    bool capture_gt();
 
-    // TODO bool CaptureString(const char* key, std::string* value);
-    // TODO bool CaptureStrings(const char* key, std::vector<std::string>*
+    // TODO bool capture_string(const char* key, std::string* value);
+    // TODO bool capture_strings(const char* key, std::vector<std::string>*
     // values);
-    // TODO bool CaptureInt(const char* key, int* value);
-    // TODO bool CaptureInts(const char* key, std::vector<int>* values);
+    // TODO bool capture_int(const char* key, int* value);
+    // TODO bool capture_ints(const char* key, std::vector<int>* values);
 
-    // ParseGenotype sequentially parses genotype fields.
-    EParsingEvent ParseGenotype();
+    // Parses genotype fields one by one.
+    Parsing_event parse_genotype();
 
-    // GetGT returns the GT values parsed by ParseGenotype in
+    // Returns the GT values parsed by parse_genotype in
     // its previous iteration.
-    const std::vector<int>& GetGT() const
+    const std::vector<int>& get_gt() const
     {
-        return m_GT;
+        return gt;
     }
-    // IsPhasedGT returns true if the parsed sample was phased.
-    bool IsPhasedGT() const
+    // Returns true if the parsed sample was phased.
+    bool is_phased_gt() const
     {
-        return m_PhasedGT;
-    }
-
-    // GenotypeAvailable returns true if at least one more genotype
-    // field is available. The caller has an option to either use
-    // this method or count the retrieved genotypes to determine
-    // when the last genotype on the current data line has been parsed.
-    bool GenotypeAvailable() const
-    {
-        return m_Tokenizer.GetTokenTerm() == '\t';
+        return phased_gt;
     }
 
-    // ClearLine skips the remaining part of the current data line.
+    // Returns true if at least one more genotype field is available.
+    // The caller has an option to either use this method or count the
+    // retrieved genotypes to determine when the last genotype on the
+    // current data line has been parsed.
+    bool genotype_available() const
+    {
+        return tokenizer.get_terminator() == '\t';
+    }
+
+    // Skips the remaining part of the current data line.
     // This operation may require more data to be read. The client
     // code must call this method after parsing each line even if
     // the line has been parsed to the end, because this method also
     // determines whether end-of-file has been reached.
-    EParsingEvent ClearLine();
+    Parsing_event clear_line();
 
 private:
-    enum EParsingState {
-        eFileFormatVersion,
-        eMetaInfoKey,
-        eMetaInfoValue,
-        eHeaderLineColumns,
-        eSampleIDs,
-        eChrom,
-        ePos,
-        eID,
-        eRef,
-        eAlt,
-        eQuality,
-        eFilter,
-        eInfoField,
-        eGenotypeFormat,
-        eGenotypes,
-        eEndOfDataLine,
-        eClearLine,
-        ePeekAfterEOL
+    enum State {
+        parsing_fileformat,
+        parsing_metainfo_key,
+        parsing_metainfo_value,
+        parsing_header_line_columns,
+        parsing_sample_ids,
+        parsing_chrom,
+        parsing_pos,
+        parsing_id,
+        parsing_ref,
+        parsing_alt,
+        parsing_quality,
+        parsing_filter,
+        parsing_info_field,
+        parsing_genotype_format,
+        parsing_genotypes,
+        end_of_data_line,
+        skipping_to_next_line,
+        peeking_beyond_newline
     };
-    int m_ParsingState = eFileFormatVersion;
+    int state = parsing_fileformat;
 
-    int m_FieldsToSkip = 0;
+    int fields_to_skip = 0;
 
-    std::string m_CurrentMetaInfoKey;
+    std::string current_meta_info_key;
 
-    unsigned m_HeaderLineColumnOK;
+    unsigned header_line_column_ok;
 
-    EParsingEvent x_HeaderError(const char* error_message)
+    Parsing_event header_error(const char* err_msg)
     {
-        m_ErrorReport = error_message;
-        return eError;
+        error_message = err_msg;
+        return error;
     }
 
-    EParsingEvent x_InvalidMetaInfoLineError()
+    Parsing_event invalid_meta_info_line_error()
     {
-        return x_HeaderError("Malformed meta-information line");
+        return header_error("Malformed meta-information line");
     }
 
-    EParsingEvent x_InvalidHeaderLineError()
+    Parsing_event invalid_header_line_error()
     {
-        return x_HeaderError("Malformed VCF header line");
+        return header_error("Malformed VCF header line");
     }
 
-    EParsingEvent x_DataLineError(const std::string& msg)
+    Parsing_event data_line_error(const std::string& err_msg)
     {
-        m_ErrorReport = msg;
-        return eError;
+        error_message = err_msg;
+        return error;
     }
 
-    EParsingEvent x_MissingMandatoryFieldError(const char* field_name)
+    Parsing_event missing_mandatory_field_error(const char* field_name)
     {
-        m_ParsingState = eEndOfDataLine;
+        state = end_of_data_line;
 
-        std::string msg = "Missing mandatory VCF field \"";
-        msg += field_name;
-        msg += '"';
-        return x_DataLineError(msg);
+        std::string err_msg = "Missing mandatory VCF field \"";
+        err_msg += field_name;
+        err_msg += '"';
+        return data_line_error(err_msg);
     }
 
-    std::vector<CVCFWarning> m_Warnings;
-    std::string m_ErrorReport;
+    std::vector<Warning> warnings;
+    std::string error_message;
 
-    CVCFTokenizer m_Tokenizer;
+    VCF_tokenizer tokenizer;
 
-    CVCFHeader m_Header;
+    VCF_header header;
 
-    unsigned m_NumberLen;
-    size_t m_NextListIndex;
+    unsigned number_len;
+    size_t next_list_index;
 
-    std::string m_Chrom;
-    unsigned m_Pos;
-    std::vector<std::string> m_IDs;
-    std::string m_Ref;
-    std::vector<std::string> m_Alts;
-    bool m_AllelesParsed;
-    std::string m_Quality;
-    std::vector<std::string> m_Filters;
-    std::vector<std::string> m_Info;
+    std::string chrom;
+    unsigned pos;
+    std::vector<std::string> ids;
+    std::string ref;
+    std::vector<std::string> alts;
+    bool alleles_parsed;
+    std::string quality;
+    std::vector<std::string> filters;
+    std::vector<std::string> info;
 
-    void x_ResetDataLine()
+    void reset_data_line()
     {
-        m_ParsingState = eChrom;
-        m_AllelesParsed = false;
+        state = parsing_chrom;
+        alleles_parsed = false;
     }
 
     // TODO Implement the INFO and FORMAT type definitions in the header.
-    std::set<std::string> m_FormatKeys;
+    std::set<std::string> format_keys;
 
-    struct CLessCStr {
+    struct Strcmp {
         bool operator()(const char* left, const char* right) const
         {
             return strcmp(left, right) < 0;
@@ -390,31 +387,38 @@ private:
     };
 
     // Positions of the reserved genotype keys in the FORMAT field.
-    struct SGenotypeKeyPositions {
+    struct Genotype_key_positions {
         unsigned number_of_positions;
-        unsigned GT;
-        std::map<const char*, unsigned, CLessCStr> other_keys;
+        unsigned gt;
+        std::map<const char*, unsigned, Strcmp> other_keys;
 
-        void Clear()
+        void clear()
         {
-            GT = number_of_positions = 0;
+            gt = number_of_positions = 0;
             other_keys.clear();
         }
-    } m_GenotypeKeyPositions;
+    } genotype_key_positions;
 
-    enum EDataType { eInteger, eFloat, eFlag, eCharacter, eString, eGT };
-
-    enum ENumberOfValues {
-        eScalar,
-        eOnePerAlt,
-        eOnePerAllele,
-        eOnePerGenotype,
-        eUnbound,
-        eExactNumber
+    enum Data_type {
+        vcf_integer,
+        vcf_float,
+        vcf_flag,
+        vcf_character,
+        vcf_string,
+        vcf_gt
     };
 
-    struct SGenotypeValue {
-        EDataType data_type;
+    enum Number_of_values {
+        scalar,
+        one_per_alt,
+        one_per_allele,
+        one_per_genotype,
+        unbound,
+        exact_number
+    };
+
+    struct Genotype_value {
+        Data_type data_type;
         unsigned number_of_values;
         union {
             bool* flag;
@@ -427,50 +431,48 @@ private:
         };
     };
 
-    unsigned m_CurrentGenotypeFieldIndex;
+    unsigned current_genotype_field_index;
 
-    std::vector<SGenotypeValue> m_GenotypeValues;
-    unsigned m_CurrentGenotypeValueIndex;
+    std::vector<Genotype_value> genotype_values;
+    unsigned current_genotype_value_index;
 
-    std::vector<int> m_GT;
-    bool m_PhasedGT;
+    std::vector<int> gt;
+    bool phased_gt;
 
-    void x_ClearGenotypeValues()
+    void reset_genotype_values()
     {
-        memset(m_GenotypeValues.data(), 0,
-                (char*) &*m_GenotypeValues.end() -
-                        (char*) m_GenotypeValues.data());
-        m_CurrentGenotypeFieldIndex = 0;
-        m_NumberLen = 0;
+        memset(genotype_values.data(), 0,
+                (char*) &*genotype_values.end() -
+                        (char*) genotype_values.data());
+        current_genotype_field_index = 0;
+        number_len = 0;
     }
 
-    SGenotypeValue* x_AllocGenotypeValue(unsigned index)
+    Genotype_value* alloc_genotype_value(unsigned index)
     {
-        if (m_GenotypeValues.size() <= index) {
-            size_t old_size = m_GenotypeValues.size();
-            m_GenotypeValues.resize(index + 1);
-            char* new_struct_ptr = (char*) (m_GenotypeValues.data() + old_size);
+        if (genotype_values.size() <= index) {
+            size_t old_size = genotype_values.size();
+            genotype_values.resize(index + 1);
+            char* new_struct_ptr = (char*) (genotype_values.data() + old_size);
             memset(new_struct_ptr, 0,
-                    (char*) &*m_GenotypeValues.end() - (char*) new_struct_ptr);
+                    (char*) &*genotype_values.end() - (char*) new_struct_ptr);
         }
-        return m_GenotypeValues.data() + index;
+        return genotype_values.data() + index;
     }
 
-    EParsingEvent x_SkipToState(EParsingState target_state);
+    Parsing_event skip_to_state(State target_state);
 
-    EParsingEvent x_ParseHeader();
-    EParsingEvent x_ParsePos();
-    EParsingEvent x_ParseIDs();
-    EParsingEvent x_ParseAlts();
-    EParsingEvent x_ParseQuality();
-    EParsingEvent x_ParseFilters();
-    EParsingEvent x_ParseInfo();
-    EParsingEvent x_ParseGenotypeFormat();
-    EParsingEvent x_ParseGenotype();
+    Parsing_event continue_parsing_header();
+    Parsing_event continue_parsing_pos();
+    Parsing_event continue_parsing_ids();
+    Parsing_event continue_parsing_alts();
+    Parsing_event continue_parsing_quality();
+    Parsing_event continue_parsing_filters();
+    Parsing_event continue_parsing_info();
+    Parsing_event continue_parsing_genotype_format();
+    Parsing_event continue_parsing_genotype();
 
-    const char* x_ParseGT();
+    const char* parse_gt();
 };
-
-} /* namespace vcf */
 
 #endif /* !defined(VCF_SCANNER__HH) */
