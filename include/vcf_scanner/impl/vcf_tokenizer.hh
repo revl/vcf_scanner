@@ -37,7 +37,9 @@ class VCF_tokenizer
 public:
     void set_new_buffer(const char* buffer, size_t buffer_size)
     {
-        current_ptr = (remaining_size = buffer_size) > 0 ? buffer : nullptr;
+        current_ptr = buffer;
+
+        eof_reached = (remaining_size = buffer_size) == 0;
     }
 
     bool buffer_is_empty() const
@@ -47,7 +49,7 @@ public:
 
     bool at_eof() const
     {
-        return current_ptr == nullptr;
+        return eof_reached;
     }
 
     const char* find_newline() const
@@ -130,7 +132,7 @@ public:
     Int_parsing_result parse_uint(unsigned* number, unsigned* number_len)
     {
         if (remaining_size == 0) {
-            if (current_ptr == nullptr) {
+            if (eof_reached) {
                 set_terminator(EOF);
                 return end_of_number;
             }
@@ -165,7 +167,7 @@ public:
     bool prepare_token_or_accumulate(const char* const end_of_token)
     {
         if (end_of_token == nullptr) {
-            if (current_ptr != nullptr) { // Check for EOF
+            if (!eof_reached) {
                 if (accumulating) {
                     accumulator.append(current_ptr, remaining_size);
                 } else {
@@ -176,7 +178,7 @@ public:
                 return false;
             }
 
-            // EOF has been reached. Return the accumulated
+            // End of file has been reached. Return the accumulated
             // bytes as the last token.
 
             set_terminator(EOF);
@@ -228,11 +230,11 @@ public:
         accumulating = false;
 
         if (end_of_token == nullptr) {
-            if (current_ptr != nullptr) { // Check for EOF
+            if (!eof_reached) {
                 return false;
             }
 
-            // EOF has been reached.
+            // End of file has been reached.
             set_terminator(EOF);
             return true;
         }
@@ -376,13 +378,14 @@ public:
 
 private:
     unsigned line_number = 1;
-    int terminator = '\0';
+    int terminator;
 
-    const char* current_ptr = nullptr;
-    size_t remaining_size = 0;
+    const char* current_ptr;
+    size_t remaining_size;
+    bool eof_reached;
 
-    std::string accumulator;
     bool accumulating = false;
+    std::string accumulator;
 
     VCF_string_view token;
 
