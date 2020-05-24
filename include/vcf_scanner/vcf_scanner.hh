@@ -355,8 +355,8 @@ private:
 
     VCF_header header;
 
-    unsigned number_len;
     size_t next_list_index;
+    unsigned number_len;
 
     std::string chrom;
     unsigned pos;
@@ -431,8 +431,8 @@ private:
 
     unsigned current_genotype_field_index;
 
-    std::vector<Genotype_value> genotype_values;
     unsigned current_genotype_value_index;
+    std::vector<Genotype_value> genotype_values;
 
     std::vector<int> gt;
     bool phased_gt;
