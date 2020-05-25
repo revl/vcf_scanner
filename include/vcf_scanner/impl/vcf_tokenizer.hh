@@ -343,37 +343,37 @@ public:
     VCF_tokenizer()
     {
         memset(newline_or_tab, 0, sizeof(newline_or_tab));
-        newline_or_tab['\n'] = true;
-        newline_or_tab['\t'] = true;
+        newline_or_tab[(unsigned char) '\n'] = true;
+        newline_or_tab[(unsigned char) '\t'] = true;
 
         memset(newline_or_tab_or_equals, 0, sizeof(newline_or_tab_or_equals));
-        newline_or_tab_or_equals['\n'] = true;
-        newline_or_tab_or_equals['\t'] = true;
-        newline_or_tab_or_equals['='] = true;
+        newline_or_tab_or_equals[(unsigned char) '\n'] = true;
+        newline_or_tab_or_equals[(unsigned char) '\t'] = true;
+        newline_or_tab_or_equals[(unsigned char) '='] = true;
 
         memset(newline_or_tab_or_semicolon, 0,
                 sizeof(newline_or_tab_or_semicolon));
-        newline_or_tab_or_semicolon['\n'] = true;
-        newline_or_tab_or_semicolon['\t'] = true;
-        newline_or_tab_or_semicolon[';'] = true;
+        newline_or_tab_or_semicolon[(unsigned char) '\n'] = true;
+        newline_or_tab_or_semicolon[(unsigned char) '\t'] = true;
+        newline_or_tab_or_semicolon[(unsigned char) ';'] = true;
 
         memset(newline_or_tab_or_comma, 0, sizeof(newline_or_tab_or_comma));
-        newline_or_tab_or_comma['\n'] = true;
-        newline_or_tab_or_comma['\t'] = true;
-        newline_or_tab_or_comma[','] = true;
+        newline_or_tab_or_comma[(unsigned char) '\n'] = true;
+        newline_or_tab_or_comma[(unsigned char) '\t'] = true;
+        newline_or_tab_or_comma[(unsigned char) ','] = true;
 
         memset(newline_or_tab_or_colon, 0, sizeof(newline_or_tab_or_colon));
-        newline_or_tab_or_colon['\n'] = true;
-        newline_or_tab_or_colon['\t'] = true;
-        newline_or_tab_or_colon[':'] = true;
+        newline_or_tab_or_colon[(unsigned char) '\n'] = true;
+        newline_or_tab_or_colon[(unsigned char) '\t'] = true;
+        newline_or_tab_or_colon[(unsigned char) ':'] = true;
 
         memset(newline_tab_colon_slash_bar, 0,
                 sizeof(newline_tab_colon_slash_bar));
-        newline_tab_colon_slash_bar['\n'] = true;
-        newline_tab_colon_slash_bar['\t'] = true;
-        newline_tab_colon_slash_bar[':'] = true;
-        newline_tab_colon_slash_bar['/'] = true;
-        newline_tab_colon_slash_bar['|'] = true;
+        newline_tab_colon_slash_bar[(unsigned char) '\n'] = true;
+        newline_tab_colon_slash_bar[(unsigned char) '\t'] = true;
+        newline_tab_colon_slash_bar[(unsigned char) ':'] = true;
+        newline_tab_colon_slash_bar[(unsigned char) '/'] = true;
+        newline_tab_colon_slash_bar[(unsigned char) '|'] = true;
     }
 
 private:
