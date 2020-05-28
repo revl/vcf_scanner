@@ -4,8 +4,6 @@
 
 #include "catch.hh"
 
-using Catch::Matchers::Equals;
-
 using Dump = std::stringstream;
 
 struct Test_case {
@@ -403,7 +401,7 @@ void ineterpret_test_plan(const char* test_plan, Dump& dump,
     }
 }
 
-static bool run_test_case_with_all_buffer_sizes(
+static void run_test_case_with_all_buffer_sizes(
         const Test_case& tc, const std::string& vcf)
 {
     for (size_t buf_size = 1; buf_size <= vcf.length(); ++buf_size) {
@@ -421,15 +419,12 @@ static bool run_test_case_with_all_buffer_sizes(
 
         CHECK(tc.expected_result == dump.str());
     }
-    return true;
 }
 
-static bool run_test_case_with_and_without_cr(
+static void run_test_case_with_and_without_cr(
         const Test_case& tc, const std::string& vcf)
 {
-    if (!run_test_case_with_all_buffer_sizes(tc, vcf)) {
-        return false;
-    }
+    run_test_case_with_all_buffer_sizes(tc, vcf);
 
     std::string vcf_with_crs = vcf;
 
@@ -440,24 +435,20 @@ static bool run_test_case_with_and_without_cr(
         start_pos += 2;
     }
 
-    return run_test_case_with_all_buffer_sizes(tc, vcf_with_crs);
+    run_test_case_with_all_buffer_sizes(tc, vcf_with_crs);
 }
 
 TEST_CASE("With or without newline at EOF")
 {
     for (const auto& tc : test_cases_sensitive_to_newline_at_eof) {
-        if (!run_test_case_with_and_without_cr(tc, tc.vcf)) {
-            break;
-        }
+        run_test_case_with_and_without_cr(tc, tc.vcf);
     }
 }
 
 TEST_CASE("With and without newline at EOF")
 {
     for (const auto& tc : test_cases_insensitive_to_newline_at_eof) {
-        if (!run_test_case_with_and_without_cr(tc, tc.vcf) ||
-                !run_test_case_with_and_without_cr(tc, tc.vcf + '\n')) {
-            break;
-        }
+        run_test_case_with_and_without_cr(tc, tc.vcf);
+        run_test_case_with_and_without_cr(tc, tc.vcf + '\n');
     }
 }
