@@ -2,8 +2,6 @@
 
 #include "catch.hh"
 
-using Catch::Matchers::Equals;
-
 TEST_CASE("Newline, no newline")
 {
     static const char test_data[] = "two\nlines";
