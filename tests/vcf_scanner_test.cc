@@ -403,48 +403,6 @@ void ineterpret_test_plan(const char* test_plan, Dump& dump,
     }
 }
 
-/* TEST_CASE(debug)
-{
-    Test_case tc = {R"(##fileformat=VCFv4.0
-#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
-1	100000	.	C
-1	100000	.	C	G	.	.	.
-1	100000	.	C	G)",
-            "@ A @ F ; @ F", R"(@3
-E:Missing mandatory VCF field "ALT"
-@4
-F:.
-;
-@5
-E:Missing mandatory VCF field "QUAL"
-)"};
-
-    size_t buf_size = tc.vcf.length();
-
-    Test_reader test_reader(tc.vcf, buf_size);
-
-    Dump dump;
-
-    VCF_scanner vcf_scanner;
-
-    if (update_dump(
-                dump, vcf_scanner, test_reader,
-VCF_scanner::need_more_data)) { ineterpret_test_plan( tc.test_plan.c_str(),
-dump, vcf_scanner, test_reader);
-    }
-
-    std::string result = dump.str();
-    if (tc.expected_result != result) {
-        FILE* expected = fopen("EXPECTED", "wt");
-        fwrite(tc.expected_result.data(), 1, tc.expected_result.length(),
-                expected);
-        fclose(expected);
-        FILE* actual = fopen("ACTUAL", "wt");
-        fwrite(result.data(), 1, result.length(), actual);
-        fclose(actual);
-    }
-} */
-
 static bool run_test_case_with_all_buffer_sizes(
         const Test_case& tc, const std::string& vcf)
 {
@@ -461,19 +419,7 @@ static bool run_test_case_with_all_buffer_sizes(
                     tc.test_plan.c_str(), dump, vcf_scanner, test_reader);
         }
 
-        std::string result = dump.str();
-        CHECK_THAT(tc.expected_result, Equals(result));
-        if (tc.expected_result != result) {
-            CHECK(tc.expected_result == result);
-            FILE* expected = fopen("EXPECTED", "wt");
-            fwrite(tc.expected_result.data(), 1, tc.expected_result.length(),
-                    expected);
-            fclose(expected);
-            FILE* actual = fopen("ACTUAL", "wt");
-            fwrite(result.data(), 1, result.length(), actual);
-            fclose(actual);
-            return false;
-        }
+        CHECK(tc.expected_result == dump.str());
     }
     return true;
 }
