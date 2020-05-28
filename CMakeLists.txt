@@ -14,7 +14,22 @@ add_library(${PROJECT_NAME}
 target_include_directories(${PROJECT_NAME} PUBLIC
 	${PROJECT_SOURCE_DIR}/include)
 
+list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake/Modules)
+
 if(${CMAKE_PROJECT_NAME} STREQUAL ${PROJECT_NAME})
+	option(BUILD_COVERAGE "Enable test coverage report" OFF)
+
+	if(BUILD_COVERAGE)
+		if(NOT "${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
+			message(FATAL_ERROR
+				"Coverage requires -DCMAKE_BUILD_TYPE=Debug")
+		endif()
+
+		include(CodeCoverage)
+
+		append_coverage_compiler_flags()
+	endif()
+
 	include(CTest)
 
 	if(BUILD_TESTING)
