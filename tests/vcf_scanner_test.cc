@@ -148,13 +148,15 @@ public:
     {
         for (;;) {
             size_t buf_size = eof_ptr - current_ptr;
-            if (buf_size > chunk_size)
+            if (buf_size > chunk_size) {
                 buf_size = chunk_size;
+            }
             VCF_scanner::Parsing_event pe =
                     vcf_scanner.feed(current_ptr, buf_size);
             current_ptr += buf_size;
-            if (pe != VCF_scanner::need_more_data)
+            if (pe != VCF_scanner::need_more_data) {
                 return pe;
+            }
         }
     }
 

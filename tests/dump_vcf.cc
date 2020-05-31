@@ -21,8 +21,9 @@ static bool parse_to_completion(
     }
 
     if (pe == VCF_scanner::ok_with_warnings) {
-        for (const auto& warning : vcf_scanner.get_warnings())
+        for (const auto& warning : vcf_scanner.get_warnings()) {
             std::cerr << "Warning: " << warning.warning_message << std::endl;
+        }
     }
 
     return true;
@@ -50,8 +51,9 @@ static bool parse_data_line(VCF_scanner& vcf_scanner, FILE* input)
             sep = ",";
         }
         std::cout << '\t';
-    } else
+    } else {
         std::cout << "\t.\t";
+    }
 
     if (!parse_to_completion(vcf_scanner.parse_alleles(), vcf_scanner, input)) {
         return false;
@@ -64,17 +66,19 @@ static bool parse_data_line(VCF_scanner& vcf_scanner, FILE* input)
             sep = ",";
         }
         std::cout << '\t';
-    } else
+    } else {
         std::cout << "\t.\t";
+    }
 
     if (!parse_to_completion(vcf_scanner.parse_quality(), vcf_scanner, input)) {
         return false;
     }
     std::string quality = vcf_scanner.get_quality();
-    if (!quality.empty())
+    if (!quality.empty()) {
         std::cout << quality;
-    else
+    } else {
         std::cout << ".";
+    }
 
     if (!parse_to_completion(vcf_scanner.parse_filters(), vcf_scanner, input)) {
         return false;
@@ -85,8 +89,9 @@ static bool parse_data_line(VCF_scanner& vcf_scanner, FILE* input)
             std::cout << sep << filter;
             sep = ";";
         }
-    } else
+    } else {
         std::cout << "\t.";
+    }
 
     if (!parse_to_completion(vcf_scanner.parse_info(), vcf_scanner, input)) {
         return false;
@@ -98,8 +103,9 @@ static bool parse_data_line(VCF_scanner& vcf_scanner, FILE* input)
             sep = ";";
         }
         std::cout << '\t';
-    } else
+    } else {
         std::cout << "\t.\t";
+    }
 
     if (vcf_scanner.get_header().has_genotype_info()) {
         if (!parse_to_completion(
@@ -151,9 +157,9 @@ int main(int argc, const char* argv[])
     VCF_scanner::Parsing_event pe;
 
     // Read the header
-    do
+    do {
         read_buffer(input);
-    while ((pe = vcf_scanner.feed(buffer, buffer_size)) ==
+    } while ((pe = vcf_scanner.feed(buffer, buffer_size)) ==
             VCF_scanner::need_more_data);
 
     if (pe != VCF_scanner::ok) {
@@ -162,8 +168,9 @@ int main(int argc, const char* argv[])
     }
 
     if (pe == VCF_scanner::ok_with_warnings) {
-        for (const auto& warning : vcf_scanner.get_warnings())
+        for (const auto& warning : vcf_scanner.get_warnings()) {
             std::cerr << "Warning: " << warning.warning_message << std::endl;
+        }
         pe = VCF_scanner::ok;
     }
 

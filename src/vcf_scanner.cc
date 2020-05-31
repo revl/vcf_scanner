@@ -138,18 +138,17 @@ VCF_scanner::Parsing_event VCF_scanner::feed(
             PARSE_CHROM();
         }
         return continue_parsing_pos();
-    } else {
-        for (; fields_to_skip > 0; --fields_to_skip) {
-            if (!tokenizer.skip_token(tokenizer.find_newline_or_tab())) {
-                return need_more_data;
-            }
-            if (tokenizer.token_is_last()) {
-                unsigned missing_field =
-                        state - parsing_chrom + 1 - fields_to_skip;
-                fields_to_skip = 0;
-                return missing_mandatory_field_error(
-                        header_line_columns[missing_field]);
-            }
+    }
+
+    for (; fields_to_skip > 0; --fields_to_skip) {
+        if (!tokenizer.skip_token(tokenizer.find_newline_or_tab())) {
+            return need_more_data;
+        }
+        if (tokenizer.token_is_last()) {
+            unsigned missing_field = state - parsing_chrom + 1 - fields_to_skip;
+            fields_to_skip = 0;
+            return missing_mandatory_field_error(
+                    header_line_columns[missing_field]);
         }
     }
 
@@ -406,10 +405,11 @@ VCF_scanner::Parsing_event VCF_scanner::parse_quality()
 VCF_scanner::Parsing_event VCF_scanner::continue_parsing_quality()
 {
     PARSE_STRING(parsing_filter);
-    if (!tokenizer.token_is_dot())
+    if (!tokenizer.token_is_dot()) {
         quality = tokenizer.get_token();
-    else
+    } else {
         quality.clear();
+    }
 
     return ok;
 }
@@ -495,9 +495,10 @@ VCF_scanner::Parsing_event VCF_scanner::continue_parsing_genotype_format()
             }
             genotype_key_positions.gt =
                     ++genotype_key_positions.number_of_positions;
-        } else
+        } else {
             genotype_key_positions.other_keys[key_iter->c_str()] =
                     ++genotype_key_positions.number_of_positions;
+        }
     } while (tokenizer.get_terminator() != '\t');
 
     reset_genotype_values();
@@ -512,7 +513,7 @@ bool VCF_scanner::capture_gt()
         return false;
     }
     --gt_index;
-    auto gt_value = alloc_genotype_value(gt_index);
+    auto* gt_value = alloc_genotype_value(gt_index);
     gt_value->data_type = vcf_gt;
     gt_value->int_vector = &gt;
     return true;
