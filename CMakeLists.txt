@@ -18,22 +18,17 @@ target_include_directories(${PROJECT_NAME} PUBLIC
 list(INSERT CMAKE_MODULE_PATH 0 ${PROJECT_SOURCE_DIR}/cmake/Modules)
 
 if(${CMAKE_PROJECT_NAME} STREQUAL ${PROJECT_NAME})
-	option(BUILD_COVERAGE "Enable test coverage report" OFF)
-
-	if(BUILD_COVERAGE)
-		if(NOT "${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
-			message(FATAL_ERROR
-				"Coverage requires -DCMAKE_BUILD_TYPE=Debug")
-		endif()
-
-		include(CodeCoverage)
-
-		append_coverage_compiler_flags()
-	endif()
-
 	include(CTest)
 
 	if(BUILD_TESTING)
+		option(BUILD_COVERAGE "Enable code coverage report" OFF)
+
+		if(BUILD_COVERAGE)
+			include(CodeCoverage)
+
+			append_coverage_compiler_flags()
+		endif()
+
 		add_subdirectory(tests)
 	endif()
 endif()
