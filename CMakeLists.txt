@@ -15,7 +15,7 @@ target_include_directories(${PROJECT_NAME} PUBLIC
 	$<INSTALL_INTERFACE:include>
 )
 
-list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake/Modules)
+list(INSERT CMAKE_MODULE_PATH 0 ${PROJECT_SOURCE_DIR}/cmake/Modules)
 
 if(${CMAKE_PROJECT_NAME} STREQUAL ${PROJECT_NAME})
 	option(BUILD_COVERAGE "Enable test coverage report" OFF)
