@@ -1,5 +1,8 @@
 cmake_minimum_required(VERSION 3.1)
 
+set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD_REQUIRED TRUE)
+
 project(vcf_scanner VERSION 0.1.0 LANGUAGES CXX)
 
 add_compile_options(-Wall -Wextra -Wpedantic -Werror)
@@ -7,8 +10,6 @@ add_compile_options(-Wall -Wextra -Wpedantic -Werror)
 add_library(${PROJECT_NAME}
 	src/vcf_scanner.cc
 )
-
-target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_11)
 
 target_include_directories(${PROJECT_NAME} PUBLIC
 	$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
