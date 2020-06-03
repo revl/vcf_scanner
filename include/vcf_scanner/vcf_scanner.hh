@@ -148,16 +148,20 @@ public:
         return tokenizer.get_line_number();
     }
 
+    // TODO FIXME Not used yet.
     struct Warning {
         unsigned line_number;
         std::string warning_message;
     };
 
+    // TODO FIXME Not used yet.
     std::vector<Warning> get_warnings() const
     {
         return warnings;
     }
 
+    // Returns the description of the error that caused parsing to fail. Use
+    // get_line_number() to get the line number where the error has occurred.
     std::string get_error() const
     {
         return error_message;
