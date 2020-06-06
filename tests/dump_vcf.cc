@@ -31,8 +31,6 @@ static bool parse_to_completion(
 
 static bool parse_data_line(VCF_scanner& vcf_scanner, FILE* input)
 {
-    std::cout << vcf_scanner.get_line_number() << ':';
-
     const char* sep;
 
     if (!parse_to_completion(vcf_scanner.parse_loc(), vcf_scanner, input)) {
@@ -128,7 +126,12 @@ static bool parse_data_line(VCF_scanner& vcf_scanner, FILE* input)
             }
             sep = "\t";
             for (auto allele : vcf_scanner.get_gt()) {
-                std::cout << sep << allele;
+                std::cout << sep;
+                if (allele < 0) {
+                    std::cout << '.';
+                } else {
+                    std::cout << allele;
+                }
                 sep = vcf_scanner.is_phased_gt() ? "|" : "/";
             }
         }
