@@ -19,6 +19,46 @@ target_include_directories(${PROJECT_NAME} PUBLIC
 list(INSERT CMAKE_MODULE_PATH 0 ${PROJECT_SOURCE_DIR}/cmake/Modules)
 
 if(${CMAKE_PROJECT_NAME} STREQUAL ${PROJECT_NAME})
+	set_target_properties(${PROJECT_NAME}
+		PROPERTIES EXPORT_NAME VCFScanner)
+
+	include(GNUInstallDirs)
+
+	install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/
+		DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+	)
+
+	install(TARGETS ${PROJECT_NAME} EXPORT VCFScannerTargets)
+
+	install(EXPORT VCFScannerTargets
+		FILE VCFScannerTargets.cmake
+		DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/VCFScanner
+	)
+
+	include(CMakePackageConfigHelpers)
+	write_basic_package_version_file(
+		${CMAKE_CURRENT_BINARY_DIR}/VCFScannerConfigVersion.cmake
+		VERSION ${PROJECT_VERSION}
+		COMPATIBILITY SameMajorVersion
+	)
+
+	configure_package_config_file(
+		${PROJECT_SOURCE_DIR}/cmake/VCFScannerConfig.cmake.in
+		${CMAKE_CURRENT_BINARY_DIR}/VCFScannerConfig.cmake
+		INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/VCFScanner
+	)
+
+	install(FILES ${CMAKE_CURRENT_BINARY_DIR}/VCFScannerConfig.cmake
+		${CMAKE_CURRENT_BINARY_DIR}/VCFScannerConfigVersion.cmake
+		DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/VCFScanner
+	)
+
+	export(EXPORT VCFScannerTargets
+		FILE ${CMAKE_CURRENT_BINARY_DIR}/VCFScannerTargets.cmake
+	)
+
+	export(PACKAGE VCFScanner)
+
 	include(CTest)
 
 	if(BUILD_TESTING)
