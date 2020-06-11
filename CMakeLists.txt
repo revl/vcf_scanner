@@ -16,8 +16,6 @@ target_include_directories(${PROJECT_NAME} PUBLIC
 	$<INSTALL_INTERFACE:include>
 )
 
-set_target_properties(${PROJECT_NAME} PROPERTIES DEBUG_POSTFIX "-debug")
-
 list(INSERT CMAKE_MODULE_PATH 0 ${PROJECT_SOURCE_DIR}/cmake/Modules)
 
 if(${CMAKE_PROJECT_NAME} STREQUAL ${PROJECT_NAME})
@@ -78,4 +76,10 @@ if(${CMAKE_PROJECT_NAME} STREQUAL ${PROJECT_NAME})
 		add_subdirectory(tests)
 		add_subdirectory(examples)
 	endif()
+
+	include(InstallRequiredSystemLibraries)
+	set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
+	set(CPACK_PACKAGE_VERSION_MAJOR "${b_VERSION_MAJOR}")
+	set(CPACK_PACKAGE_VERSION_MINOR "${b_VERSION_MINOR}")
+	include(CPack)
 endif()
