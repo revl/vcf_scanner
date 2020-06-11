@@ -76,5 +76,6 @@ if(${CMAKE_PROJECT_NAME} STREQUAL ${PROJECT_NAME})
 		endif()
 
 		add_subdirectory(tests)
+		add_subdirectory(examples)
 	endif()
 endif()

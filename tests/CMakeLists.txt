@@ -11,9 +11,6 @@ foreach(TEST_NAME IN LISTS UNIT_TESTS)
 	add_test(${TEST_NAME} ${TEST_NAME})
 endforeach(TEST_NAME)
 
-add_executable(dump_vcf dump_vcf.cc)
-target_link_libraries(dump_vcf ${PROJECT_NAME})
-
 if(BUILD_COVERAGE)
 	setup_target_for_coverage_lcov(
 		NAME coverage
@@ -21,6 +18,5 @@ if(BUILD_COVERAGE)
 		DEPENDENCIES ${UNIT_TESTS}
 		EXCLUDE "/usr/*"
 			"${PROJECT_SOURCE_DIR}/tests/catch.hh"
-			"${PROJECT_SOURCE_DIR}/tests/dump_vcf.cc"
 	)
 endif()
