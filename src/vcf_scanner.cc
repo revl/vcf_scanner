@@ -62,28 +62,6 @@ static const char* const header_line_columns[NUMBER_OF_MANDATORY_COLUMNS + 2] =
     container.resize(next_list_index);                                         \
     state = target_state;
 
-#define SKIP_TO_STATE(target_state)                                            \
-    if (state < parsing_chrom) {                                               \
-        assert(false && "VCF header must be parsed first");                    \
-        return error;                                                          \
-    }                                                                          \
-    if (state > target_state) {                                                \
-        assert(false && "clear_line() must call be called first");             \
-        return error;                                                          \
-    }                                                                          \
-    while (state < target_state) {                                             \
-        if (!tokenizer.skip_token(tokenizer.find_newline_or_tab())) {          \
-            fields_to_skip = target_state - state;                             \
-            state = target_state;                                              \
-            return need_more_data;                                             \
-        }                                                                      \
-        if (tokenizer.token_is_last()) {                                       \
-            return missing_mandatory_field_error(                              \
-                    header_line_columns[state - parsing_chrom + 1]);           \
-        }                                                                      \
-        ++state;                                                               \
-    }
-
 VCF_scanner::Parsing_event VCF_scanner::skip_to_state(
         VCF_scanner::State target_state)
 {
@@ -364,7 +342,10 @@ VCF_scanner::Parsing_event VCF_scanner::parse_ids()
 {
     next_list_index = 0;
 
-    SKIP_TO_STATE(parsing_id);
+    const Parsing_event pe = skip_to_state(parsing_id);
+    if (pe != ok) {
+        return pe;
+    }
 
     return continue_parsing_ids();
 }
@@ -379,7 +360,10 @@ VCF_scanner::Parsing_event VCF_scanner::parse_alleles()
 {
     next_list_index = 0;
 
-    SKIP_TO_STATE(parsing_ref);
+    const Parsing_event pe = skip_to_state(parsing_ref);
+    if (pe != ok) {
+        return pe;
+    }
 
     PARSE_REF();
 
@@ -397,7 +381,10 @@ VCF_scanner::Parsing_event VCF_scanner::continue_parsing_alts()
 
 VCF_scanner::Parsing_event VCF_scanner::parse_quality()
 {
-    SKIP_TO_STATE(parsing_quality);
+    const Parsing_event pe = skip_to_state(parsing_quality);
+    if (pe != ok) {
+        return pe;
+    }
 
     return continue_parsing_quality();
 }
@@ -438,7 +425,10 @@ VCF_scanner::Parsing_event VCF_scanner::parse_info()
 {
     info.clear();
 
-    SKIP_TO_STATE(parsing_info_field);
+    const Parsing_event pe = skip_to_state(parsing_info_field);
+    if (pe != ok) {
+        return pe;
+    }
 
     return continue_parsing_info();
 }
@@ -468,7 +458,10 @@ VCF_scanner::Parsing_event VCF_scanner::parse_genotype_format()
 {
     genotype_key_positions.clear();
 
-    SKIP_TO_STATE(parsing_genotype_format);
+    const Parsing_event pe = skip_to_state(parsing_genotype_format);
+    if (pe != ok) {
+        return pe;
+    }
 
     return continue_parsing_genotype_format();
 }
