@@ -23,9 +23,9 @@
 
 #include <vcf_scanner/vcf_scanner.hh>
 
-#define NUMBER_OF_MANDATORY_COLUMNS 8
+static constexpr unsigned number_of_mandatory_columns = 8;
 
-static const char* const header_line_columns[NUMBER_OF_MANDATORY_COLUMNS + 2] =
+static const char* const header_line_columns[number_of_mandatory_columns + 2] =
         {"CHROM", "POS", "ID", "REF", "ALT", "QUAL", "FILTER", "INFO", "FORMAT",
                 "GENOTYPE"};
 
@@ -40,27 +40,32 @@ static const char* const header_line_columns[NUMBER_OF_MANDATORY_COLUMNS + 2] =
     }                                                                          \
     state = target_state;
 
-#define PARSE_STRING_LIST(target_state, container, character_set)              \
-    do {                                                                       \
-        if (!tokenizer.prepare_token_or_accumulate(                            \
-                    tokenizer.find_char_from_set(character_set))) {            \
-            return need_more_data;                                             \
-        }                                                                      \
-        if (tokenizer.token_is_last()) {                                       \
-            return missing_mandatory_field_error(                              \
-                    header_line_columns[target_state - parsing_chrom]);        \
-        }                                                                      \
-        if (!tokenizer.token_is_dot()) {                                       \
-            if (next_list_index < container.size()) {                          \
-                container.at(next_list_index) = tokenizer.get_token();         \
-            } else {                                                           \
-                container.push_back(tokenizer.get_token());                    \
-            }                                                                  \
-            ++next_list_index;                                                 \
-        }                                                                      \
-    } while (tokenizer.get_terminator() != '\t');                              \
-    container.resize(next_list_index);                                         \
+VCF_scanner::Parsing_event VCF_scanner::parse_string_list(
+        VCF_scanner::State target_state, std::vector<std::string>& container,
+        const bool* character_set)
+{
+    do {
+        if (!tokenizer.prepare_token_or_accumulate(
+                    tokenizer.find_char_from_set(character_set))) {
+            return need_more_data;
+        }
+        if (tokenizer.token_is_last()) {
+            return missing_mandatory_field_error(
+                    header_line_columns[target_state - parsing_chrom]);
+        }
+        if (!tokenizer.token_is_dot()) {
+            if (next_list_index < container.size()) {
+                container.at(next_list_index) = tokenizer.get_token();
+            } else {
+                container.push_back(tokenizer.get_token());
+            }
+            ++next_list_index;
+        }
+    } while (tokenizer.get_terminator() != '\t');
+    container.resize(next_list_index);
     state = target_state;
+    return ok;
+}
 
 VCF_scanner::Parsing_event VCF_scanner::skip_to_state(
         VCF_scanner::State target_state)
@@ -252,10 +257,10 @@ VCF_scanner::Parsing_event VCF_scanner::continue_parsing_header()
             ++header_line_column_ok;
 
             if (tokenizer.token_is_last()) {
-                if (header_line_column_ok < NUMBER_OF_MANDATORY_COLUMNS) {
+                if (header_line_column_ok < number_of_mandatory_columns) {
                     return invalid_header_line_error();
                 }
-                if (header_line_column_ok > NUMBER_OF_MANDATORY_COLUMNS) {
+                if (header_line_column_ok > number_of_mandatory_columns) {
                     // The FORMAT field is present,
                     // but there are no samples.
                     header.genotype_info_present = true;
@@ -265,7 +270,7 @@ VCF_scanner::Parsing_event VCF_scanner::continue_parsing_header()
 
             // The current token ends with a tab.
             // Parse the next header line column.
-        } while (header_line_column_ok <= NUMBER_OF_MANDATORY_COLUMNS);
+        } while (header_line_column_ok <= number_of_mandatory_columns);
 
         header.genotype_info_present = true;
         state = parsing_sample_ids;
@@ -352,8 +357,8 @@ VCF_scanner::Parsing_event VCF_scanner::parse_ids()
 
 VCF_scanner::Parsing_event VCF_scanner::continue_parsing_ids()
 {
-    PARSE_STRING_LIST(parsing_ref, ids, tokenizer.newline_or_tab_or_semicolon);
-    return ok;
+    return parse_string_list(
+            parsing_ref, ids, tokenizer.newline_or_tab_or_semicolon);
 }
 
 VCF_scanner::Parsing_event VCF_scanner::parse_alleles()
@@ -372,11 +377,14 @@ VCF_scanner::Parsing_event VCF_scanner::parse_alleles()
 
 VCF_scanner::Parsing_event VCF_scanner::continue_parsing_alts()
 {
-    PARSE_STRING_LIST(parsing_quality, alts, tokenizer.newline_or_tab_or_comma);
+    const Parsing_event pe = parse_string_list(
+            parsing_quality, alts, tokenizer.newline_or_tab_or_comma);
 
-    alleles_parsed = true;
+    if (pe == ok) {
+        alleles_parsed = true;
+    }
 
-    return ok;
+    return pe;
 }
 
 VCF_scanner::Parsing_event VCF_scanner::parse_quality()
@@ -415,10 +423,8 @@ VCF_scanner::Parsing_event VCF_scanner::parse_filters()
 
 VCF_scanner::Parsing_event VCF_scanner::continue_parsing_filters()
 {
-    PARSE_STRING_LIST(
+    return parse_string_list(
             parsing_info_field, filters, tokenizer.newline_or_tab_or_semicolon);
-
-    return ok;
 }
 
 VCF_scanner::Parsing_event VCF_scanner::parse_info()
