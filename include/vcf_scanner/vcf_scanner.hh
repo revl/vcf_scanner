@@ -462,6 +462,7 @@ private:
         return genotype_values.data() + index;
     }
 
+    Parsing_event parse_string(State target_state);
     Parsing_event parse_string_list(State target_state,
             std::vector<std::string>& container, const bool* character_set);
     Parsing_event skip_to_state(State target_state);

@@ -29,16 +29,20 @@ static const char* const header_line_columns[number_of_mandatory_columns + 2] =
         {"CHROM", "POS", "ID", "REF", "ALT", "QUAL", "FILTER", "INFO", "FORMAT",
                 "GENOTYPE"};
 
-#define PARSE_STRING(target_state)                                             \
-    if (!tokenizer.prepare_token_or_accumulate(                                \
-                tokenizer.find_newline_or_tab())) {                            \
-        return need_more_data;                                                 \
-    }                                                                          \
-    if (tokenizer.token_is_last()) {                                           \
-        return missing_mandatory_field_error(                                  \
-                header_line_columns[target_state - parsing_chrom]);            \
-    }                                                                          \
+VCF_scanner::Parsing_event VCF_scanner::parse_string(
+        VCF_scanner::State target_state)
+{
+    if (!tokenizer.prepare_token_or_accumulate(
+                tokenizer.find_newline_or_tab())) {
+        return need_more_data;
+    }
+    if (tokenizer.token_is_last()) {
+        return missing_mandatory_field_error(
+                header_line_columns[target_state - parsing_chrom]);
+    }
     state = target_state;
+    return ok;
+}
 
 VCF_scanner::Parsing_event VCF_scanner::parse_string_list(
         VCF_scanner::State target_state, std::vector<std::string>& container,
@@ -96,14 +100,6 @@ VCF_scanner::Parsing_event VCF_scanner::skip_to_state(
     return ok;
 }
 
-#define PARSE_CHROM()                                                          \
-    PARSE_STRING(parsing_pos);                                                 \
-    chrom = tokenizer.get_token();
-
-#define PARSE_REF()                                                            \
-    PARSE_STRING(parsing_alt);                                                 \
-    ref = tokenizer.get_token();
-
 VCF_scanner::Parsing_event VCF_scanner::feed(
         const char* buffer, ssize_t buffer_size)
 {
@@ -118,7 +114,11 @@ VCF_scanner::Parsing_event VCF_scanner::feed(
             return continue_parsing_header();
         }
         if (state == parsing_chrom) {
-            PARSE_CHROM();
+            const VCF_scanner::Parsing_event pe = parse_string(parsing_pos);
+            if (pe != ok) {
+                return pe;
+            }
+            chrom = tokenizer.get_token();
         }
         return continue_parsing_pos();
     }
@@ -139,7 +139,16 @@ VCF_scanner::Parsing_event VCF_scanner::feed(
     case parsing_id:
         return continue_parsing_ids();
     case parsing_ref:
-        PARSE_REF();
+        // Parsing of 'ref' and 'alts' is requested by a single
+        // method parse_alleles(). Once 'ref' has been parsed,
+        // proceed to parsing 'alts'.
+        {
+            const VCF_scanner::Parsing_event pe = parse_string(parsing_alt);
+            if (pe != ok) {
+                return pe;
+            }
+            ref = tokenizer.get_token();
+        }
         /* FALL THROUGH */
     case parsing_alt:
         return continue_parsing_alts();
@@ -315,7 +324,11 @@ VCF_scanner::Parsing_event VCF_scanner::parse_loc()
     pos = 0;
     number_len = 0;
 
-    PARSE_CHROM();
+    const VCF_scanner::Parsing_event pe = parse_string(parsing_pos);
+    if (pe != ok) {
+        return pe;
+    }
+    chrom = tokenizer.get_token();
 
     return continue_parsing_pos();
 }
@@ -365,12 +378,19 @@ VCF_scanner::Parsing_event VCF_scanner::parse_alleles()
 {
     next_list_index = 0;
 
-    const Parsing_event pe = skip_to_state(parsing_ref);
+    Parsing_event pe = skip_to_state(parsing_ref);
     if (pe != ok) {
         return pe;
     }
 
-    PARSE_REF();
+    // Parsing of 'ref' and 'alts' is requested by a single
+    // method parse_alleles(). Once 'ref' has been parsed,
+    // proceed to parsing 'alts'.
+    pe = parse_string(parsing_alt);
+    if (pe != ok) {
+        return pe;
+    }
+    ref = tokenizer.get_token();
 
     return continue_parsing_alts();
 }
@@ -399,7 +419,10 @@ VCF_scanner::Parsing_event VCF_scanner::parse_quality()
 
 VCF_scanner::Parsing_event VCF_scanner::continue_parsing_quality()
 {
-    PARSE_STRING(parsing_filter);
+    const Parsing_event pe = parse_string(parsing_filter);
+    if (pe != ok) {
+        return pe;
+    }
     if (!tokenizer.token_is_dot()) {
         quality = tokenizer.get_token();
     } else {
