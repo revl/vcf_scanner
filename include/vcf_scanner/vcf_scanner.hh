@@ -464,7 +464,8 @@ private:
 
     Parsing_event parse_string(State target_state);
     Parsing_event parse_string_list(State target_state,
-            std::vector<std::string>& container, const bool* character_set);
+            std::vector<std::string>& container,
+            const std::array<bool, 256>& character_set);
     Parsing_event skip_to_state(State target_state);
 
     Parsing_event continue_parsing_header();

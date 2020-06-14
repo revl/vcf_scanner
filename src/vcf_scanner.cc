@@ -46,7 +46,7 @@ VCF_scanner::Parsing_event VCF_scanner::parse_string(
 
 VCF_scanner::Parsing_event VCF_scanner::parse_string_list(
         VCF_scanner::State target_state, std::vector<std::string>& container,
-        const bool* character_set)
+        const std::array<bool, 256>& character_set)
 {
     do {
         if (!tokenizer.prepare_token_or_accumulate(

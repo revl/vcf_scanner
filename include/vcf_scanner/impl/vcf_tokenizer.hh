@@ -28,6 +28,7 @@
 #include <iostream>
 #include <climits>
 #include <cstring>
+#include <array>
 
 typedef std::string VCF_string_view;
 
@@ -58,8 +59,8 @@ public:
     }
 
 private:
-    static const char* find_char_from_set(
-            const char* buffer, size_t buffer_size, const bool* character_set)
+    static const char* find_char_from_set(const char* buffer,
+            size_t buffer_size, const std::array<bool, 256>& character_set)
     {
         for (; buffer_size > 0; ++buffer, --buffer_size) {
             if (character_set[(unsigned char) *buffer]) {
@@ -71,7 +72,8 @@ private:
     }
 
 public:
-    const char* find_char_from_set(const bool* character_set) const
+    const char* find_char_from_set(
+            const std::array<bool, 256>& character_set) const
     {
         return find_char_from_set(current_ptr, remaining_size, character_set);
     }
@@ -342,33 +344,31 @@ public:
 public:
     VCF_tokenizer()
     {
-        memset(newline_or_tab, 0, sizeof(newline_or_tab));
+        newline_or_tab.fill(false);
         newline_or_tab[(unsigned char) '\n'] = true;
         newline_or_tab[(unsigned char) '\t'] = true;
 
-        memset(newline_or_tab_or_equals, 0, sizeof(newline_or_tab_or_equals));
+        newline_or_tab_or_equals.fill(false);
         newline_or_tab_or_equals[(unsigned char) '\n'] = true;
         newline_or_tab_or_equals[(unsigned char) '\t'] = true;
         newline_or_tab_or_equals[(unsigned char) '='] = true;
 
-        memset(newline_or_tab_or_semicolon, 0,
-                sizeof(newline_or_tab_or_semicolon));
+        newline_or_tab_or_semicolon.fill(false);
         newline_or_tab_or_semicolon[(unsigned char) '\n'] = true;
         newline_or_tab_or_semicolon[(unsigned char) '\t'] = true;
         newline_or_tab_or_semicolon[(unsigned char) ';'] = true;
 
-        memset(newline_or_tab_or_comma, 0, sizeof(newline_or_tab_or_comma));
+        newline_or_tab_or_comma.fill(false);
         newline_or_tab_or_comma[(unsigned char) '\n'] = true;
         newline_or_tab_or_comma[(unsigned char) '\t'] = true;
         newline_or_tab_or_comma[(unsigned char) ','] = true;
 
-        memset(newline_or_tab_or_colon, 0, sizeof(newline_or_tab_or_colon));
+        newline_or_tab_or_colon.fill(false);
         newline_or_tab_or_colon[(unsigned char) '\n'] = true;
         newline_or_tab_or_colon[(unsigned char) '\t'] = true;
         newline_or_tab_or_colon[(unsigned char) ':'] = true;
 
-        memset(newline_tab_colon_slash_bar, 0,
-                sizeof(newline_tab_colon_slash_bar));
+        newline_tab_colon_slash_bar.fill(false);
         newline_tab_colon_slash_bar[(unsigned char) '\n'] = true;
         newline_tab_colon_slash_bar[(unsigned char) '\t'] = true;
         newline_tab_colon_slash_bar[(unsigned char) ':'] = true;
@@ -392,18 +392,18 @@ private:
 public:
     // For parsing the meta-information lines
     // as well as the first token of the header line
-    bool newline_or_tab_or_equals[256];
+    std::array<bool, 256> newline_or_tab_or_equals;
     // For extracting CHROM, POS, REF, or QUAL fields,
     // or skipping any other field
-    bool newline_or_tab[256];
+    std::array<bool, 256> newline_or_tab;
     // For extracting ID, FILTER, or INFO
-    bool newline_or_tab_or_semicolon[256];
+    std::array<bool, 256> newline_or_tab_or_semicolon;
     // For extracting ALT
-    bool newline_or_tab_or_comma[256];
+    std::array<bool, 256> newline_or_tab_or_comma;
     // For extracting FORMAT or GENOTYPE
-    bool newline_or_tab_or_colon[256];
+    std::array<bool, 256> newline_or_tab_or_colon;
     // For extracting the GT values
-    bool newline_tab_colon_slash_bar[256];
+    std::array<bool, 256> newline_tab_colon_slash_bar;
 };
 
 #endif /* !defined(VCF_TOKENIZER__HH) */
