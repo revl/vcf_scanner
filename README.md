@@ -1,8 +1,11 @@
 ## Features
 
-* This parser allows for input reading to be done in a separate thread so that
-  reading and parsing can happen in parallel.
-* VCF fields that present no interest to the caller are skipped and not parsed.
+* This parser leaves it to the caller to load the input data into memory
+  buffers. As a result, the parser is non-blocking. The caller can choose to
+  read input data in a separate thread so that reading and parsing happens in
+  parallel.
+* The caller decides which VCF fields to parse. Fields that present no interest
+  to the caller are skipped and not parsed.
 * Very few bytes in the input buffer are accessed more than once.
 * Memory is allocated frugally.
 * The library is header-only with no external dependencies.
