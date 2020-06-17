@@ -7,11 +7,9 @@ project(vcf_scanner VERSION 0.1.0 LANGUAGES CXX)
 
 add_compile_options(-Wall -Wextra -Wpedantic -Werror)
 
-add_library(${PROJECT_NAME}
-	src/vcf_scanner.cc
-)
+add_library(${PROJECT_NAME} INTERFACE)
 
-target_include_directories(${PROJECT_NAME} PUBLIC
+target_include_directories(${PROJECT_NAME} INTERFACE
 	$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
 	$<INSTALL_INTERFACE:include>
 )

@@ -4,7 +4,8 @@
   reading and parsing can happen in parallel.
 * VCF fields that present no interest to the caller are skipped and not parsed.
 * Very few bytes in the input buffer are accessed more than once.
-* Memory is allocated mainly for the return values.
+* Memory is allocated frugally.
+* The library is header-only with no external dependencies.
 
 ## To build a test coverage report
 
