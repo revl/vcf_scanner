@@ -36,31 +36,32 @@ typedef std::string VCF_string_view;
 class VCF_tokenizer
 {
 public:
-    void set_new_buffer(const char* buffer, size_t buffer_size)
+    void set_new_buffer(const char* buffer, size_t buffer_size) noexcept
     {
         current_ptr = buffer;
 
         eof_reached = (remaining_size = buffer_size) == 0;
     }
 
-    bool buffer_is_empty() const
+    bool buffer_is_empty() const noexcept
     {
         return remaining_size == 0;
     }
 
-    bool at_eof() const
+    bool at_eof() const noexcept
     {
         return eof_reached;
     }
 
-    const char* find_newline() const
+    const char* find_newline() const noexcept
     {
         return (const char*) memchr(current_ptr, '\n', remaining_size);
     }
 
 private:
     static const char* find_char_from_set(const char* buffer,
-            size_t buffer_size, const std::array<bool, 256>& character_set)
+            size_t buffer_size,
+            const std::array<bool, 256>& character_set) noexcept
     {
         for (; buffer_size > 0; ++buffer, --buffer_size) {
             if (character_set[(unsigned char) *buffer]) {
@@ -73,47 +74,47 @@ private:
 
 public:
     const char* find_char_from_set(
-            const std::array<bool, 256>& character_set) const
+            const std::array<bool, 256>& character_set) const noexcept
     {
         return find_char_from_set(current_ptr, remaining_size, character_set);
     }
 
-    const char* find_newline_or_tab() const
+    const char* find_newline_or_tab() const noexcept
     {
         return find_char_from_set(current_ptr, remaining_size, newline_or_tab);
     }
 
-    const char* find_newline_or_tab_or_equals() const
+    const char* find_newline_or_tab_or_equals() const noexcept
     {
         return find_char_from_set(
                 current_ptr, remaining_size, newline_or_tab_or_equals);
     }
 
-    const char* find_newline_or_tab_or_semicolon() const
+    const char* find_newline_or_tab_or_semicolon() const noexcept
     {
         return find_char_from_set(
                 current_ptr, remaining_size, newline_or_tab_or_semicolon);
     }
 
-    const char* find_newline_or_tab_or_comma() const
+    const char* find_newline_or_tab_or_comma() const noexcept
     {
         return find_char_from_set(
                 current_ptr, remaining_size, newline_or_tab_or_comma);
     }
 
-    const char* find_newline_or_tab_or_colon() const
+    const char* find_newline_or_tab_or_colon() const noexcept
     {
         return find_char_from_set(
                 current_ptr, remaining_size, newline_or_tab_or_colon);
     }
 
 private:
-    void set_terminator(int term)
+    void set_terminator(int term) noexcept
     {
         terminator = term;
     }
 
-    void set_terminator_and_inc_line_num_if_newline(int term)
+    void set_terminator_and_inc_line_num_if_newline(int term) noexcept
     {
         set_terminator(term);
 
@@ -122,7 +123,7 @@ private:
         }
     }
 
-    void advance_by(size_t number_of_bytes)
+    void advance_by(size_t number_of_bytes) noexcept
     {
         current_ptr += number_of_bytes;
         remaining_size -= number_of_bytes;
@@ -131,7 +132,8 @@ private:
 public:
     enum Int_parsing_result { end_of_number, integer_overflow, end_of_buffer };
 
-    Int_parsing_result parse_uint(unsigned* number, unsigned* number_len)
+    Int_parsing_result parse_uint(
+            unsigned* number, unsigned* number_len) noexcept
     {
         if (remaining_size == 0) {
             if (eof_reached) {
@@ -166,7 +168,7 @@ public:
         return end_of_buffer;
     }
 
-    bool prepare_token_or_accumulate(const char* const end_of_token)
+    bool prepare_token_or_accumulate(const char* const end_of_token) noexcept
     {
         if (end_of_token == nullptr) {
             if (!eof_reached) {
@@ -227,7 +229,7 @@ public:
         return true;
     }
 
-    bool skip_token(const char* const end_of_token)
+    bool skip_token(const char* const end_of_token) noexcept
     {
         accumulating = false;
 
@@ -251,12 +253,12 @@ public:
         return true;
     }
 
-    const VCF_string_view& get_token() const
+    const VCF_string_view& get_token() const noexcept
     {
         return token;
     }
 
-    bool get_token_as_uint(unsigned* number) const
+    bool get_token_as_uint(unsigned* number) const noexcept
     {
         unsigned len = (unsigned int) token.size();
 
@@ -286,18 +288,18 @@ public:
         return true;
     }
 
-    bool token_is_dot() const
+    bool token_is_dot() const noexcept
     {
         return token.empty() || (token.length() == 1 && token.front() == '.');
     }
 
-    bool token_is_last() const
+    bool token_is_last() const noexcept
     {
         return terminator == '\n' || terminator == EOF;
     }
 
-    bool get_key_value(
-            VCF_string_view* key, VCF_string_view* value, char delim = '=')
+    bool get_key_value(VCF_string_view* key, VCF_string_view* value,
+            char delim = '=') noexcept
     {
         size_t delim_pos = token.find(delim);
 
@@ -331,18 +333,18 @@ public:
         return true;
     }
 
-    unsigned get_line_number() const
+    unsigned get_line_number() const noexcept
     {
         return line_number;
     }
 
-    int get_terminator() const
+    int get_terminator() const noexcept
     {
         return terminator;
     }
 
 public:
-    VCF_tokenizer()
+    VCF_tokenizer() noexcept
     {
         newline_or_tab.fill(false);
         newline_or_tab[(unsigned char) '\n'] = true;
