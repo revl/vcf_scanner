@@ -163,7 +163,7 @@ public:
             if (!tokenizer.skip_token(tokenizer.find_newline_or_tab())) {
                 return need_more_data;
             }
-            if (tokenizer.token_is_last()) {
+            if (tokenizer.at_eol()) {
                 unsigned missing_field =
                         state - parsing_chrom + 1 - fields_to_skip;
                 fields_to_skip = 0;
@@ -701,7 +701,7 @@ private:
                     tokenizer.find_newline_or_tab())) {
             return need_more_data;
         }
-        if (tokenizer.token_is_last()) {
+        if (tokenizer.at_eol()) {
             return missing_mandatory_field_error(target_state - parsing_chrom);
         }
         state = target_state;
@@ -717,7 +717,7 @@ private:
                         tokenizer.find_char_from_set(character_set))) {
                 return need_more_data;
             }
-            if (tokenizer.token_is_last()) {
+            if (tokenizer.at_eol()) {
                 return missing_mandatory_field_error(
                         target_state - parsing_chrom);
             }
@@ -754,7 +754,7 @@ private:
                 state = target_state;
                 return need_more_data;
             }
-            if (tokenizer.token_is_last()) {
+            if (tokenizer.at_eol()) {
                 return missing_mandatory_field_error(state - parsing_chrom + 1);
             }
             ++state;
@@ -793,7 +793,7 @@ private:
                 return need_more_data;
             }
 
-            if (tokenizer.token_is_last()) {
+            if (tokenizer.at_eol()) {
                 return invalid_meta_info_line_error();
             }
 
@@ -854,7 +854,7 @@ private:
 
                 ++header_line_column_ok;
 
-                if (tokenizer.token_is_last()) {
+                if (tokenizer.at_eol()) {
                     if (header_line_column_ok < number_of_mandatory_columns) {
                         return invalid_header_line_error();
                     }
@@ -966,7 +966,7 @@ private:
                                 tokenizer.newline_or_tab_or_semicolon))) {
                 return need_more_data;
             }
-            if (tokenizer.token_is_last()) {
+            if (tokenizer.at_eol()) {
                 state = end_of_data_line;
                 return ok;
             }
@@ -988,7 +988,7 @@ private:
                                 tokenizer.newline_or_tab_or_colon))) {
                 return need_more_data;
             }
-            if (tokenizer.token_is_last()) {
+            if (tokenizer.at_eol()) {
                 state = end_of_data_line;
                 if (header.sample_ids.empty()) {
                     return ok;
@@ -1025,7 +1025,7 @@ private:
                             tokenizer.find_newline_or_tab_or_colon())) {
                     return need_more_data;
                 }
-                if (tokenizer.token_is_last()) {
+                if (tokenizer.at_eol()) {
                     state = end_of_data_line;
                     return ok;
                 }
@@ -1036,7 +1036,7 @@ private:
                     return need_more_data;
                 }
 
-                if (tokenizer.token_is_last()) {
+                if (tokenizer.at_eol()) {
                     state = end_of_data_line;
                 }
 
@@ -1058,7 +1058,7 @@ private:
                     break;
                 }
 
-                if (tokenizer.token_is_last()) {
+                if (tokenizer.at_eol()) {
                     return ok;
                 }
             }

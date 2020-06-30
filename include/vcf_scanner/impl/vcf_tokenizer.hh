@@ -293,7 +293,7 @@ public:
         return token.empty() || (token.length() == 1 && token.front() == '.');
     }
 
-    bool token_is_last() const noexcept
+    bool at_eol() const noexcept
     {
         return terminator == '\n' || terminator == EOF;
     }

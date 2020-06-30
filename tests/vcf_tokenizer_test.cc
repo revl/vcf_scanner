@@ -246,13 +246,13 @@ TEST_CASE("Simple checks")
 
     CHECK(tokenizer.get_token() == ".");
     CHECK(tokenizer.token_is_dot());
-    CHECK(tokenizer.token_is_last());
+    CHECK(tokenizer.at_eol());
 
     REQUIRE(tokenizer.prepare_token_or_accumulate(tokenizer.find_newline()));
     CHECK(!tokenizer.token_is_dot());
-    CHECK(tokenizer.token_is_last());
+    CHECK(tokenizer.at_eol());
 
     tokenizer.set_new_buffer(test_data, sizeof(test_data) - 1);
     REQUIRE(tokenizer.prepare_token_or_accumulate(tokenizer.find_newline()));
-    CHECK(tokenizer.token_is_last());
+    CHECK(tokenizer.at_eol());
 }
