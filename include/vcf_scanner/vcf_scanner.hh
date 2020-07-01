@@ -206,7 +206,7 @@ public:
             }
             /* FALL THROUGH */
         case peeking_beyond_newline:
-            reset_data_line();
+            reset_state_for_next_data_line();
             return ok;
         }
 
@@ -508,7 +508,7 @@ public:
             }
         }
 
-        reset_data_line();
+        reset_state_for_next_data_line();
 
         return ok;
     }
@@ -605,7 +605,7 @@ private:
     std::vector<std::string> filters;
     std::vector<std::string> info;
 
-    void reset_data_line()
+    void reset_state_for_next_data_line()
     {
         state = parsing_chrom;
         alleles_parsed = false;
@@ -891,7 +891,7 @@ private:
             return need_more_data;
         }
 
-        reset_data_line();
+        reset_state_for_next_data_line();
 
         return ok;
     }
