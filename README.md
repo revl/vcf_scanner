@@ -8,6 +8,7 @@
   to the caller are skipped and not parsed.
 * Very few bytes in the input buffer are accessed more than once.
 * Memory is allocated frugally.
+* Exceptions are not used for error reporting.
 * The library is header-only with no external dependencies.
 
 ## To build a test coverage report
