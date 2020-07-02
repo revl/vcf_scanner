@@ -66,6 +66,12 @@ public:
     }
 
 private:
+    void add_meta_info(
+            std::string&& meta_info_key, const VCF_string_view& meta_info_line)
+    {
+        meta_info[meta_info_key].push_back(meta_info_line);
+    }
+
     std::string file_format_version;
     Meta_info meta_info;
     bool genotype_info_present = false;
@@ -830,8 +836,8 @@ private:
                         "Unexpected end of file while parsing VCF file header");
             }
 
-            header.meta_info[current_meta_info_key].push_back(
-                    tokenizer.get_token());
+            header.add_meta_info(
+                    std::move(current_meta_info_key), tokenizer.get_token());
 
             // Go back to parsing the next key.
             goto parse_meta_info_key;
