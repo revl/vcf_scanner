@@ -9,18 +9,18 @@ static void read_buffer(FILE* input)
 }
 
 static bool parse_to_completion(
-        VCF_scanner::Parsing_event pe, VCF_scanner& vcf_scanner, FILE* input)
+        VCF_parsing_event pe, VCF_scanner& vcf_scanner, FILE* input)
 {
-    while (pe == VCF_scanner::need_more_data) {
+    while (pe == VCF_parsing_event::need_more_data) {
         read_buffer(input);
         pe = vcf_scanner.feed(buffer, buffer_size);
     }
 
-    if (pe == VCF_scanner::error) {
+    if (pe == VCF_parsing_event::error) {
         return false;
     }
 
-    if (pe == VCF_scanner::ok_with_warnings) {
+    if (pe == VCF_parsing_event::ok_with_warnings) {
         for (const auto& warning : vcf_scanner.get_warnings()) {
             std::cerr << "Warning: " << warning.warning_message << std::endl;
         }
@@ -157,24 +157,24 @@ int main(int argc, const char* argv[])
 
     VCF_scanner vcf_scanner;
 
-    VCF_scanner::Parsing_event pe;
+    VCF_parsing_event pe;
 
     // Read the header
     do {
         read_buffer(input);
     } while ((pe = vcf_scanner.feed(buffer, buffer_size)) ==
-            VCF_scanner::need_more_data);
+            VCF_parsing_event::need_more_data);
 
-    if (pe != VCF_scanner::ok) {
+    if (pe != VCF_parsing_event::ok) {
         std::cerr << vcf_scanner.get_error() << std::endl;
         return 1;
     }
 
-    if (pe == VCF_scanner::ok_with_warnings) {
+    if (pe == VCF_parsing_event::ok_with_warnings) {
         for (const auto& warning : vcf_scanner.get_warnings()) {
             std::cerr << "Warning: " << warning.warning_message << std::endl;
         }
-        pe = VCF_scanner::ok;
+        pe = VCF_parsing_event::ok;
     }
 
     std::cout << "##fileformat="

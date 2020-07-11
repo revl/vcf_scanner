@@ -1,7 +1,7 @@
 add_library(catch2 catch_main.cc)
 
 set(UNIT_TESTS
-	vcf_tokenizer_test
+	tokenizer_test
 	vcf_scanner_test
 )
 

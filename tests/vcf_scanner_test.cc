@@ -144,17 +144,16 @@ public:
         chunk_size(cs)
     {}
 
-    VCF_scanner::Parsing_event read_and_feed(VCF_scanner& vcf_scanner)
+    VCF_parsing_event read_and_feed(VCF_scanner& vcf_scanner)
     {
         for (;;) {
             size_t buf_size = eof_ptr - current_ptr;
             if (buf_size > chunk_size) {
                 buf_size = chunk_size;
             }
-            VCF_scanner::Parsing_event pe =
-                    vcf_scanner.feed(current_ptr, buf_size);
+            VCF_parsing_event pe = vcf_scanner.feed(current_ptr, buf_size);
             current_ptr += buf_size;
-            if (pe != VCF_scanner::need_more_data) {
+            if (pe != VCF_parsing_event::need_more_data) {
                 return pe;
             }
         }
@@ -168,16 +167,16 @@ private:
 };
 
 bool update_dump(Dump& dump, VCF_scanner& vcf_scanner, Test_reader& test_reader,
-        VCF_scanner::Parsing_event pe)
+        VCF_parsing_event pe)
 {
-    if (pe == VCF_scanner::need_more_data) {
+    if (pe == VCF_parsing_event::need_more_data) {
         pe = test_reader.read_and_feed(vcf_scanner);
     }
-    if (pe == VCF_scanner::error) {
+    if (pe == VCF_parsing_event::error) {
         dump << "E:" << vcf_scanner.get_error() << std::endl;
         return false;
     }
-    if (pe == VCF_scanner::ok_with_warnings) {
+    if (pe == VCF_parsing_event::ok_with_warnings) {
         for (const auto& warning : vcf_scanner.get_warnings()) {
             dump << "W:" << warning.line_number << warning.warning_message
                  << std::endl;
@@ -187,7 +186,7 @@ bool update_dump(Dump& dump, VCF_scanner& vcf_scanner, Test_reader& test_reader,
 }
 
 bool dump_issues_and_clear_line(Dump& dump, VCF_scanner& vcf_scanner,
-        Test_reader& test_reader, VCF_scanner::Parsing_event pe)
+        Test_reader& test_reader, VCF_parsing_event pe)
 {
     if (!update_dump(dump, vcf_scanner, test_reader, pe)) {
         update_dump(dump, vcf_scanner, test_reader, vcf_scanner.clear_line());
@@ -414,7 +413,7 @@ static void run_test_case_with_all_buffer_sizes(
         VCF_scanner vcf_scanner;
 
         if (update_dump(dump, vcf_scanner, test_reader,
-                    VCF_scanner::need_more_data)) {
+                    VCF_parsing_event::need_more_data)) {
             ineterpret_test_plan(
                     tc.test_plan.c_str(), dump, vcf_scanner, test_reader);
         }
