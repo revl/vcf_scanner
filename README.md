@@ -9,53 +9,71 @@
 *   The caller decides which VCF fields to parse. Fields that are not requested
     by the caller are skipped and not parsed.
 *   Very few bytes in the input buffer are accessed more than once.
-*   Memory is allocated frugally.
+*   Memory is allocated frugally and reused whenever possible.
 *   Exceptions are not used for error reporting.
 *   The library is header-only with no dependencies outside the standard
     library.
 
 ## How to use
 
-### Preparation
+### Preparation and parsing the header
 
-1.  Create an instance of `VCF_parser`.
+1.  Allocate a generous amount of memory for the input buffer. The buffer must
+    not be changed or deleted after it's been passed to the parser using the
+    `feed()` method (see below).
 
-2.  Implement a function that reads the next chunk of input data into a buffer.
-    The buffer must be external to the function.
+        char buffer[1024 * 1024];
 
-        bool parse_to_completion(
-                VCF_parsing_event pe, VCF_scanner& vcf_scanner, FILE* input)
-        {
-            while (pe == VCF_parsing_event::need_more_data) {
-                read_buffer(input);
-                pe = vcf_scanner.feed(buffer, buffer_size);
-            }
+2.  Create an instance of the parser.
 
-            if (pe == VCF_parsing_event::error) {
-                return false;
-            }
+        VCF_scanner vcf_scanner;
 
-            if (pe == VCF_parsing_event::ok_with_warnings) {
-                for (const auto& warning : vcf_scanner.get_warnings()) {
-                    std::cerr << "Warning: " << warning.warning_message << std::endl;
-                }
-            }
+3.  Implement a function to read the input stream and feed the data into the
+    parser.
 
-            return true;
-        }
+        auto read_and_feed = [&]() -> VCF_parsing_event {
+            size_t bytes_read;
 
-### Parsing the header
+            if (vcf_stream->at_eof())
+                // The parser treats an empty input buffer as an indicator
+                // that end of file has been reached.
+                // Your stream reading function may already follow this
+                // convention.
+                bytes_read = 0;
+            else
+                bytes_read = vcf_stream->read(buffer, sizeof(buffer));
 
-2.  Supply input data to the parser using the `feed()` method until it returns
-    `ok`, which means that the header has been successfully parsed and can be
-    accessed using the `get_header()` method.
+            // Continue parsing the token whose parsing was suspended
+            // because the previous buffer was depleted.
+            // Return the result of parsing with additional data.
+            return vcf_scanner.feed(buffer, bytes_read);
+        };
 
-    Do not discard the current input buffer - it contains the beginning of the
+4.  Implement a function that repeatedly feeds the parser until the current
+    token is completely parsed.
+
+        auto parse_to_completion = [&](VCF_parsing_event pe) {
+            while (pe == VCF_parsing_event::need_more_data)
+                pe = read_and_feed();
+
+            if (pe == VCF_parsing_event::error)
+                terminate_parsing_with_error(vcf_scanner.get_error(),
+                        vcf_scanner.get_line_number());
+
+            if (pe == VCF_parsing_event::ok_with_warnings)
+                show_warnings(vcf_scanner.get_warnings());
+        };
+
+5.  Read the initial input buffer and use the completion function to parse the
+    header.
+
+        parse_to_completion(read_and_feed());
+
+        // The header has been successfully parsed and and can be
+        // accessed using the get_header() method.
+
+6.  Do not discard the current input buffer - it contains the beginning of the
     data lines.  Proceed to the data line parsing loop.
-
-    If the `feed()` method returns `error` while parsing the header, the file
-    cannot be parsed. Call `get_error()` to get the error message and
-    `get_line_number()` to get the line number containing the error.
 
 ### Data line parsing loop
 
