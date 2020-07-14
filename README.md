@@ -2,7 +2,7 @@
 
 ## Features
 
-*   The parser itself does not read the input VCF file and leaves it to the
+*   The parser does not read the input VCF file stream and leaves it to the
     caller to load the input data into memory one buffer at a time.  As a
     result, the parser is non-blocking. The caller can choose to read input
     data in a separate thread so that reading and parsing happen in parallel.
@@ -16,9 +16,35 @@
 
 ## How to use
 
-### Parsing the header
+### Preparation
 
 1.  Create an instance of `VCF_parser`.
+
+2.  Implement a function that reads the next chunk of input data into a buffer.
+    The buffer must be external to the function.
+
+        bool parse_to_completion(
+                VCF_parsing_event pe, VCF_scanner& vcf_scanner, FILE* input)
+        {
+            while (pe == VCF_parsing_event::need_more_data) {
+                read_buffer(input);
+                pe = vcf_scanner.feed(buffer, buffer_size);
+            }
+
+            if (pe == VCF_parsing_event::error) {
+                return false;
+            }
+
+            if (pe == VCF_parsing_event::ok_with_warnings) {
+                for (const auto& warning : vcf_scanner.get_warnings()) {
+                    std::cerr << "Warning: " << warning.warning_message << std::endl;
+                }
+            }
+
+            return true;
+        }
+
+### Parsing the header
 
 2.  Supply input data to the parser using the `feed()` method until it returns
     `ok`, which means that the header has been successfully parsed and can be
@@ -37,6 +63,9 @@ All data line fields are optional and can be omitted by not calling the
 respective `parse_...` methods.
 
 1.  Request parsing of the CHROM and POS fields by calling `parse_loc()`.
+	1.  If the above method returns `need_more_data`, more input data must
+	    be provided using the `feed()` method until it returns `ok`.
+	2.  When `parse_loc()` or 
 
 ## To build a test coverage report
 
