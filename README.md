@@ -57,7 +57,7 @@
                 pe = read_and_feed();
 
             if (pe == VCF_parsing_event::error)
-                terminate_parsing_with_error(vcf_scanner.get_error(),
+                throw Parsing_error(vcf_scanner.get_error(),
                         vcf_scanner.get_line_number());
 
             if (pe == VCF_parsing_event::ok_with_warnings)
@@ -77,13 +77,30 @@
 
 ### Data line parsing loop
 
-All data line fields are optional and can be omitted by not calling the
-respective `parse_...` methods.
+All data line fields are optional and can be skipped by not calling the
+respective `parse_...()` methods. However, the `clear_line()` method must be
+called at the end of each line regardless of whether any fields were skipped.
 
-1.  Request parsing of the CHROM and POS fields by calling `parse_loc()`.
-	1.  If the above method returns `need_more_data`, more input data must
-	    be provided using the `feed()` method until it returns `ok`.
-	2.  When `parse_loc()` or 
+The fields must be extracted in the exact order as defined by the VCF
+specification.
+
+1. Repeat until there are no more data lines left to read.
+
+        while (!vcf_scanner.at_eof()) {
+
+2.  Request parsing of the CHROM and POS fields by calling `parse_loc()`.
+    Use `get_chrom()` and `get_pos()` to get the CHROM and POS fields
+    respectively.
+
+            parse_to_completion(vcf_scanner.parse_loc());
+
+            std::string chrom = vcf_scanner.get_chrom();
+            unsigned pos = vcf_scanner.get_pos();
+
+10. Skip to the next line by calling `clear_line()`.
+
+            parse_to_completion(vcf_scanner.clear_line());
+        }
 
 ## To build a test coverage report
 
