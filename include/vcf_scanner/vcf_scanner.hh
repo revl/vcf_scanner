@@ -127,7 +127,7 @@ public:
     // is treated as an EOF condition.
     //
     // The method resumes parsing of the previously requested token and
-    // returns eOK when the entire token has been parsed.
+    // returns 'ok' when the entire token has been parsed.
     VCF_parsing_event feed(const char* buffer, ssize_t buffer_size)
     {
         return feed_impl(buffer, buffer_size);
@@ -157,7 +157,7 @@ public:
 
     // Returns the VCF header, which becomes available
     // once the last of the initial series of calls to Feed
-    // returns eOK.
+    // returns 'ok'.
     const VCF_header& get_header() const
     {
         return header;
