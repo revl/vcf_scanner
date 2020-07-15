@@ -1,4 +1,4 @@
-# VCF_scanner - a blazingly fast Variant Call Format parser
+# VCF_scanner - a blazing fast library to parse large Variant Call Format files
 
 ## Features
 
@@ -84,7 +84,11 @@ called at the end of each line regardless of whether any fields were skipped.
 The fields must be extracted in the exact order as defined by the VCF
 specification.
 
-1. Repeat until there are no more data lines left to read.
+The information returned by most of the `get_...()` methods is valid only
+immedialtely after the respective `parse_...()` method returned `ok` or
+`ok_with_warnings`.
+
+1.  Repeat until there are no more data lines left to read.
 
         while (!vcf_scanner.at_eof()) {
 
@@ -96,6 +100,20 @@ specification.
 
             std::string chrom = vcf_scanner.get_chrom();
             unsigned pos = vcf_scanner.get_pos();
+
+3.  Parse the ID field with `parse_ids()` and `get_ids()`.
+
+            parse_to_completion(vcf_scanner.parse_ids());
+
+            std::vector<std::string> ids = vcf_scanner.get_ids();
+
+4. The REF and ALT alleles are parsed by the `parse_alleles()` method.
+   Use `get_ref()` and `get_alts()` to retrieve them.
+
+            parse_to_completion(vcf_scanner.parse_alleles());
+
+            std::string ref = vcf_scanner.get_ref();
+            std::vector<std::string> alts = vcf_scanner.get_alts();
 
 10. Skip to the next line by calling `clear_line()`.
 
