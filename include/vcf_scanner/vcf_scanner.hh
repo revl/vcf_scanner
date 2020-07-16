@@ -222,9 +222,22 @@ public:
     {
         return parse_quality_impl();
     }
+    // Returns whether the QUAL field contains the MISSING value ('.').
+    bool quality_is_missing() const
+    {
+        return quality.empty();
+    }
+    // Returns the QUAL value. This method must not be called if the value
+    // is missing.
+    float get_quality() const
+    {
+        assert(!quality_is_missing());
 
-    // Returns the QUAL field parsed by parse_quality().
-    std::string get_quality() const
+        return std::stof(quality);
+    }
+    // Returns the original string representation of the QUAL value as it
+    // appears in the VCF file or an empty string if the value is missing.
+    const std::string& get_quality_as_string() const
     {
         return quality;
     }

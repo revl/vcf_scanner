@@ -365,7 +365,8 @@ void ineterpret_test_plan(const char* test_plan, Dump& dump,
             ++test_plan;
             if (dump_issues_and_clear_line(dump, vcf_scanner, test_reader,
                         vcf_scanner.parse_quality())) {
-                dump << "Q:" << vcf_scanner.get_quality() << std::endl;
+                dump << "Q:" << vcf_scanner.get_quality_as_string()
+                     << std::endl;
             }
             break;
         case 'F':

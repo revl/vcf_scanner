@@ -49,8 +49,8 @@
             return vcf_scanner.feed(buffer, bytes_read);
         };
 
-4.  Implement a function that repeatedly feeds the parser until the current
-    token is completely parsed.
+4.  Implement a function to check the result of parsing a token and call the
+    above function until the token is completely parsed.
 
         auto parse_to_completion = [&](VCF_parsing_event pe) {
             while (pe == VCF_parsing_event::need_more_data)
@@ -114,6 +114,15 @@ immedialtely after the respective `parse_...()` method returned `ok` or
 
             std::string ref = vcf_scanner.get_ref();
             std::vector<std::string> alts = vcf_scanner.get_alts();
+
+5.  Parse the QUAL field.
+
+            parse_to_completion(vcf_scanner.parse_quality());
+
+            if (!vcf_scanner.quality_is_missing()) {
+                float quality = vcf_scanner.get_quality();
+                std::string quality_str = vcf_scanner.get_quality_as_string();
+            }
 
 10. Skip to the next line by calling `clear_line()`.
 

@@ -1,6 +1,6 @@
 #include <vcf_scanner/vcf_scanner.hh>
 
-static char buffer[1];
+static char buffer[1024 * 1024];
 static size_t buffer_size;
 
 static void read_buffer(FILE* input)
@@ -71,9 +71,8 @@ static bool parse_data_line(VCF_scanner& vcf_scanner, FILE* input)
     if (!parse_to_completion(vcf_scanner.parse_quality(), vcf_scanner, input)) {
         return false;
     }
-    std::string quality = vcf_scanner.get_quality();
-    if (!quality.empty()) {
-        std::cout << quality;
+    if (!vcf_scanner.quality_is_missing()) {
+        std::cout << vcf_scanner.get_quality_as_string();
     } else {
         std::cout << ".";
     }
