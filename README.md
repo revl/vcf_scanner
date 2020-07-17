@@ -124,6 +124,18 @@ immedialtely after the respective `parse_...()` method returned `ok` or
                 std::string quality_str = vcf_scanner.get_quality_as_string();
             }
 
+6.  Parse the FILTER field.
+
+            parse_to_completion(vcf_scanner.parse_filters());
+
+            std::vector<std::string> filters = vcf_scanner.get_filters();
+
+7.  Parse the INFO field.
+
+            parse_to_completion(vcf_scanner.parse_info());
+
+            std::vector<std::string> info = vcf_scanner.get_info();
+
 10. Skip to the next line by calling `clear_line()`.
 
             parse_to_completion(vcf_scanner.clear_line());
