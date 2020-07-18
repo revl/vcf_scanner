@@ -136,6 +136,25 @@ immedialtely after the respective `parse_...()` method returned `ok` or
 
             std::vector<std::string> info = vcf_scanner.get_info();
 
+8.  Parse genotype info.
+
+            if (vcf_scanner.get_header().has_genotype_info()) {
+                parse_to_completion(vcf_scanner.parse_genotype_format());
+
+                if (vcf_scanner.capture_gt()) {
+                    while (vcf_scanner.genotype_available()) {
+                        parse_to_completion(vcf_scanner.parse_genotype());
+
+                        for (auto allele_index : vcf_scanner.get_gt()) {
+                            // 1. The MISSING value is represented by
+                            //    allele_index < 0.
+                            // 2. vcf_scanner.is_phased_gt() will return
+                            //    true if the genotype is phased.
+                        }
+                    }
+                }
+            }
+
 10. Skip to the next line by calling `clear_line()`.
 
             parse_to_completion(vcf_scanner.clear_line());
