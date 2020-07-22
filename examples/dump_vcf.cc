@@ -32,11 +32,14 @@ static bool parse_to_completion(
 static bool parse_data_line(VCF_scanner& vcf_scanner, FILE* input)
 {
     const char* sep;
+    std::string chrom;
+    unsigned pos;
 
-    if (!parse_to_completion(vcf_scanner.parse_loc(), vcf_scanner, input)) {
+    if (!parse_to_completion(
+                vcf_scanner.parse_loc(&chrom, &pos), vcf_scanner, input)) {
         return false;
     }
-    std::cout << vcf_scanner.get_chrom() << '\t' << vcf_scanner.get_pos();
+    std::cout << chrom << '\t' << pos;
 
     std::vector<std::string> ids;
     if (!parse_to_completion(vcf_scanner.parse_ids(), vcf_scanner, input)) {

@@ -29,7 +29,7 @@ protected:
                 if (pe != VCF_parsing_event::ok) {
                     return pe;
                 }
-                chrom = tokenizer.get_token();
+                *output.loc.chrom = tokenizer.get_token();
             }
             return continue_parsing_pos();
         }
@@ -89,7 +89,7 @@ protected:
     }
 
     // Parses the CHROM and the POS fields.
-    VCF_parsing_event parse_loc_impl()
+    VCF_parsing_event parse_loc_impl(std::string* chrom, unsigned* pos)
     {
         // LCOV_EXCL_START
         if (state != parsing_chrom) {
@@ -103,14 +103,15 @@ protected:
         }
         // LCOV_EXCL_STOP
 
-        pos = 0;
+        output.loc.chrom = chrom;
+        *(output.loc.pos = pos) = 0;
         number_len = 0;
 
         const VCF_parsing_event pe = parse_string(parsing_pos);
         if (pe != VCF_parsing_event::ok) {
             return pe;
         }
-        chrom = tokenizer.get_token();
+        *output.loc.chrom = tokenizer.get_token();
 
         return continue_parsing_pos();
     }
@@ -333,8 +334,12 @@ protected:
     size_t next_list_index;
     unsigned number_len;
 
-    std::string chrom;
-    unsigned pos;
+    union {
+        struct {
+            std::string* chrom;
+            unsigned* pos;
+        } loc;
+    } output;
     std::vector<std::string> ids;
     std::string ref;
     std::vector<std::string> alts;
@@ -636,7 +641,7 @@ protected:
 
     VCF_parsing_event continue_parsing_pos()
     {
-        switch (tokenizer.parse_uint(&pos, &number_len)) {
+        switch (tokenizer.parse_uint(output.loc.pos, &number_len)) {
         case VCF_tokenizer::end_of_buffer:
             return VCF_parsing_event::need_more_data;
         case VCF_tokenizer::integer_overflow:

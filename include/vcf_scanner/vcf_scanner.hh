@@ -171,21 +171,13 @@ public:
         return tokenizer.at_eof();
     }
 
-    // Parses the CHROM and the POS fields.
-    VCF_parsing_event parse_loc()
+    // Parses the CHROM and the POS fields and saves the parsed
+    // values to the variables pointed to by 'chrom' and 'pos'.
+    // The lifespan of those variables must exceed this 'parse_loc()'
+    // call as well as all 'feed()' calls that may follow.
+    VCF_parsing_event parse_loc(std::string* chrom, unsigned* pos)
     {
-        return parse_loc_impl();
-    }
-
-    // Returns the CHROM field parsed by parse_loc.
-    const std::string& get_chrom() const
-    {
-        return chrom;
-    }
-    // Returns the POS field parsed by parse_loc.
-    unsigned get_pos() const
-    {
-        return pos;
+        return parse_loc_impl(chrom, pos);
     }
 
     // Parses the ID field.

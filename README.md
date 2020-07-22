@@ -93,13 +93,13 @@ immedialtely after the respective `parse_...()` method returned `ok` or
         while (!vcf_scanner.at_eof()) {
 
 2.  Request parsing of the CHROM and POS fields by calling `parse_loc()`.
-    Use `get_chrom()` and `get_pos()` to get the CHROM and POS fields
-    respectively.
+    The variables `chrom` and `pos` must exist during `parse_loc()` and all
+    subsequent calls to `feed()`.
 
-            parse_to_completion(vcf_scanner.parse_loc());
+            std::string chrom;
+            unsigned pos;
 
-            std::string chrom = vcf_scanner.get_chrom();
-            unsigned pos = vcf_scanner.get_pos();
+            parse_to_completion(vcf_scanner.parse_loc(&chrom, &pos));
 
 3.  Parse the ID field with `parse_ids()` and `get_ids()`.
 

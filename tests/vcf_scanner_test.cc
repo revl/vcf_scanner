@@ -316,6 +316,9 @@ const char* dump_genotype(Dump& dump, VCF_scanner& vcf_scanner,
 void ineterpret_test_plan(const char* test_plan, Dump& dump,
         VCF_scanner& vcf_scanner, Test_reader& test_reader)
 {
+    std::string chrom;
+    unsigned pos;
+
     for (;;) {
         switch (*test_plan) {
         case '.':
@@ -338,9 +341,8 @@ void ineterpret_test_plan(const char* test_plan, Dump& dump,
         case 'L':
             ++test_plan;
             if (dump_issues_and_clear_line(dump, vcf_scanner, test_reader,
-                        vcf_scanner.parse_loc())) {
-                dump << "L:" << vcf_scanner.get_chrom() << '@'
-                     << vcf_scanner.get_pos() << std::endl;
+                        vcf_scanner.parse_loc(&chrom, &pos))) {
+                dump << "L:" << chrom << '@' << pos << std::endl;
             }
             break;
         case '#':
