@@ -133,10 +133,9 @@ public:
         return feed_impl(buffer, buffer_size);
     }
 
-    // Returns the current line number in the input VCF file before
-    // parsing the next token. The line number will increase after the
-    // last token on the current line has been parsed. The returned value
-    // is one-based.
+    // Returns the current line number in the input VCF file before parsing the
+    // next token. The line number will increase after the last token on the
+    // current line has been parsed. The returned value is one-based.
     unsigned get_line_number() const
     {
         return tokenizer.get_line_number();
@@ -155,58 +154,45 @@ public:
         return error_message;
     }
 
-    // Returns the VCF header, which becomes available
-    // once the last of the initial series of calls to Feed
-    // returns 'ok'.
+    // Returns the VCF header, which becomes available once the last of the
+    // initial series of calls to Feed returns 'ok'.
     const VCF_header& get_header() const
     {
         return header;
     }
 
-    // Returns true if the entire input stream has been
-    // successfully parsed. The method returns false if the
-    // VCF file has at least one more data line to parse.
+    // Returns true if the entire input stream has been successfully parsed.
+    // The method returns false if the VCF file has at least one more data line
+    // to parse.
     bool at_eof() const
     {
         return tokenizer.at_eof();
     }
 
-    // Parses the CHROM and the POS fields and saves the parsed
-    // values to the variables pointed to by 'chrom' and 'pos'.
-    // The lifespan of those variables must exceed this 'parse_loc()'
-    // call as well as all 'feed()' calls that may follow.
+    // Parses the CHROM and the POS fields and stores the parsed values into
+    // the variables pointed to by 'chrom' and 'pos'.  The lifespan of those
+    // variables must exceed this 'parse_loc()' call as well as all 'feed()'
+    // calls that may be required to finish parsing the CHROM and POS fields.
     VCF_parsing_event parse_loc(std::string* chrom, unsigned* pos)
     {
         return parse_loc_impl(chrom, pos);
     }
 
-    // Parses the ID field.
-    VCF_parsing_event parse_ids()
+    // Parses the ID field into the 'ids' array.  The lifespan of the array
+    // must exceed this 'parse_ids()' call as well as all 'feed()' calls that
+    // may be required to finish parsing the ID field.
+    VCF_parsing_event parse_ids(std::vector<std::string>* ids)
     {
-        return parse_ids_impl();
+        return parse_ids_impl(ids);
     }
 
-    // Returns the IDs parsed by parse_ids().
-    const std::vector<std::string>& get_ids() const
+    // Parses the REF and the ALT fields.  The lifespan of 'ref' and 'alts'
+    // must exceed this 'parse_alleles()' call as well as all 'feed()' calls
+    // that may be required to finish parsing the REF and ALT fields.
+    VCF_parsing_event parse_alleles(
+            std::string* ref, std::vector<std::string>* alts)
     {
-        return ids;
-    }
-
-    // Parses the REF and the ALT fields.
-    VCF_parsing_event parse_alleles()
-    {
-        return parse_alleles_impl();
-    }
-
-    // Returns the REF field parsed by parse_alleles.
-    const std::string& get_ref() const
-    {
-        return ref;
-    }
-    // Returns the ALT field parsed by parse_alleles().
-    const std::vector<std::string>& get_alts() const
-    {
-        return alts;
+        return parse_alleles_impl(ref, alts);
     }
 
     // Parses the QUAL field.

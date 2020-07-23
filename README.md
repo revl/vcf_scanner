@@ -88,34 +88,32 @@ The information returned by most of the `get_...()` methods is valid only
 immedialtely after the respective `parse_...()` method returned `ok` or
 `ok_with_warnings`.
 
-1.  Repeat until there are no more data lines left to read.
+1.  Define the variables for the field values outside the data reading loop.
+    This will reduce unnecessary memory reallocation.
+
+        std::string chrom;
+        unsigned pos;
+        std::vector<std::string> ids;
+        std::string ref;
+        std::vector<std::string> alts;
+
+2.  Repeat until there are no more data lines left to read.
 
         while (!vcf_scanner.at_eof()) {
 
-2.  Request parsing of the CHROM and POS fields by calling `parse_loc()`.
-    The variables `chrom` and `pos` must exist during `parse_loc()` and all
-    subsequent calls to `feed()`.
-
-            std::string chrom;
-            unsigned pos;
+3.  Request parsing of the CHROM and POS fields by calling `parse_loc()`.
 
             parse_to_completion(vcf_scanner.parse_loc(&chrom, &pos));
 
-3.  Parse the ID field with `parse_ids()` and `get_ids()`.
+4.  Parse the ID field.
 
-            parse_to_completion(vcf_scanner.parse_ids());
+            parse_to_completion(vcf_scanner.parse_ids(&ids));
 
-            std::vector<std::string> ids = vcf_scanner.get_ids();
+5. The REF and ALT alleles are parsed by the `parse_alleles()` method.
 
-4. The REF and ALT alleles are parsed by the `parse_alleles()` method.
-   Use `get_ref()` and `get_alts()` to retrieve them.
+            parse_to_completion(vcf_scanner.parse_alleles(&ref, &alts));
 
-            parse_to_completion(vcf_scanner.parse_alleles());
-
-            std::string ref = vcf_scanner.get_ref();
-            std::vector<std::string> alts = vcf_scanner.get_alts();
-
-5.  Parse the QUAL field.
+6.  Parse the QUAL field.
 
             parse_to_completion(vcf_scanner.parse_quality());
 
@@ -124,19 +122,19 @@ immedialtely after the respective `parse_...()` method returned `ok` or
                 std::string quality_str = vcf_scanner.get_quality_as_string();
             }
 
-6.  Parse the FILTER field.
+7.  Parse the FILTER field.
 
             parse_to_completion(vcf_scanner.parse_filters());
 
             std::vector<std::string> filters = vcf_scanner.get_filters();
 
-7.  Parse the INFO field.
+8.  Parse the INFO field.
 
             parse_to_completion(vcf_scanner.parse_info());
 
             std::vector<std::string> info = vcf_scanner.get_info();
 
-8.  Parse genotype info.
+9.  Parse genotype info.
 
             if (vcf_scanner.get_header().has_genotype_info()) {
                 parse_to_completion(vcf_scanner.parse_genotype_format());

@@ -58,7 +58,7 @@ protected:
                 if (pe != VCF_parsing_event::ok) {
                     return pe;
                 }
-                ref = tokenizer.get_token();
+                *output.alleles.ref = tokenizer.get_token();
             }
             /* FALL THROUGH */
         case parsing_alt:
@@ -88,7 +88,6 @@ protected:
         return VCF_parsing_event::error; // LCOV_EXCL_LINE
     }
 
-    // Parses the CHROM and the POS fields.
     VCF_parsing_event parse_loc_impl(std::string* chrom, unsigned* pos)
     {
         // LCOV_EXCL_START
@@ -116,8 +115,9 @@ protected:
         return continue_parsing_pos();
     }
 
-    VCF_parsing_event parse_ids_impl()
+    VCF_parsing_event parse_ids_impl(std::vector<std::string>* ids)
     {
+        output.ids = ids;
         next_list_index = 0;
 
         const VCF_parsing_event pe = skip_to_state(parsing_id);
@@ -128,8 +128,11 @@ protected:
         return continue_parsing_ids();
     }
 
-    VCF_parsing_event parse_alleles_impl()
+    VCF_parsing_event parse_alleles_impl(
+            std::string* ref, std::vector<std::string>* alts)
     {
+        output.alleles.ref = ref;
+        output.alleles.alts = alts;
         next_list_index = 0;
 
         VCF_parsing_event pe = skip_to_state(parsing_ref);
@@ -144,7 +147,7 @@ protected:
         if (pe != VCF_parsing_event::ok) {
             return pe;
         }
-        ref = tokenizer.get_token();
+        *output.alleles.ref = tokenizer.get_token();
 
         return continue_parsing_alts();
     }
@@ -339,11 +342,14 @@ protected:
             std::string* chrom;
             unsigned* pos;
         } loc;
+        std::vector<std::string>* ids;
+        struct {
+            std::string* ref;
+            std::vector<std::string>* alts;
+        } alleles;
     } output;
-    std::vector<std::string> ids;
-    std::string ref;
-    std::vector<std::string> alts;
     bool alleles_parsed;
+    unsigned number_of_alts;
     std::string quality;
     std::vector<std::string> filters;
     std::vector<std::string> info;
@@ -664,17 +670,18 @@ protected:
 
     VCF_parsing_event continue_parsing_ids()
     {
-        return parse_string_list(
-                parsing_ref, ids, tokenizer.newline_or_tab_or_semicolon);
+        return parse_string_list(parsing_ref, *output.ids,
+                tokenizer.newline_or_tab_or_semicolon);
     }
 
     VCF_parsing_event continue_parsing_alts()
     {
-        const VCF_parsing_event pe = parse_string_list(
-                parsing_quality, alts, tokenizer.newline_or_tab_or_comma);
+        const VCF_parsing_event pe = parse_string_list(parsing_quality,
+                *output.alleles.alts, tokenizer.newline_or_tab_or_comma);
 
         if (pe == VCF_parsing_event::ok) {
             alleles_parsed = true;
+            number_of_alts = (unsigned) output.alleles.alts->size();
         }
 
         return pe;
@@ -857,7 +864,7 @@ protected:
 
                 gt.push_back((int) allele);
 
-                if (alleles_parsed && allele > alts.size()) {
+                if (alleles_parsed && allele > number_of_alts) {
                     return "Allele index exceeds the number of alleles";
                 }
             }

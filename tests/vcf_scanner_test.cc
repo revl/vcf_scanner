@@ -318,6 +318,9 @@ void ineterpret_test_plan(const char* test_plan, Dump& dump,
 {
     std::string chrom;
     unsigned pos;
+    std::vector<std::string> ids;
+    std::string ref;
+    std::vector<std::string> alts;
 
     for (;;) {
         switch (*test_plan) {
@@ -348,18 +351,18 @@ void ineterpret_test_plan(const char* test_plan, Dump& dump,
         case '#':
             ++test_plan;
             if (dump_issues_and_clear_line(dump, vcf_scanner, test_reader,
-                        vcf_scanner.parse_ids())) {
+                        vcf_scanner.parse_ids(&ids))) {
                 dump << "ID:";
-                dump_list(dump, vcf_scanner.get_ids());
+                dump_list(dump, ids);
                 dump << std::endl;
             }
             break;
         case 'A':
             ++test_plan;
             if (dump_issues_and_clear_line(dump, vcf_scanner, test_reader,
-                        vcf_scanner.parse_alleles())) {
-                dump << "R:" << vcf_scanner.get_ref() << ";A:";
-                dump_list(dump, vcf_scanner.get_alts());
+                        vcf_scanner.parse_alleles(&ref, &alts))) {
+                dump << "R:" << ref << ";A:";
+                dump_list(dump, alts);
                 dump << std::endl;
             }
             break;
