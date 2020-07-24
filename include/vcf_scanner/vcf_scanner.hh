@@ -195,29 +195,15 @@ public:
         return parse_alleles_impl(ref, alts);
     }
 
-    // Parses the QUAL field.
-    VCF_parsing_event parse_quality()
+    // Parses the QUAL field and returns its original string representation as
+    // it appears in the VCF file or an empty string if the value is missing.
+    // The 'std::stof()' function can be used to convert that value to a float.
+    // The 'quality_is_missing' variable will be set to true if the field value
+    // is MISSING ('.'). Otherwise, it will be set to false.
+    VCF_parsing_event parse_quality(
+            std::string* quality_str, bool* quality_is_missing)
     {
-        return parse_quality_impl();
-    }
-    // Returns whether the QUAL field contains the MISSING value ('.').
-    bool quality_is_missing() const
-    {
-        return quality.empty();
-    }
-    // Returns the QUAL value. This method must not be called if the value
-    // is missing.
-    float get_quality() const
-    {
-        assert(!quality_is_missing());
-
-        return std::stof(quality);
-    }
-    // Returns the original string representation of the QUAL value as it
-    // appears in the VCF file or an empty string if the value is missing.
-    const std::string& get_quality_as_string() const
-    {
-        return quality;
+        return parse_quality_impl(quality_str, quality_is_missing);
     }
 
     // Parses the FILTER field.

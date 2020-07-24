@@ -152,8 +152,12 @@ protected:
         return continue_parsing_alts();
     }
 
-    VCF_parsing_event parse_quality_impl()
+    VCF_parsing_event parse_quality_impl(
+            std::string* quality_str, bool* quality_is_missing)
     {
+        output.quality.value = quality_str;
+        output.quality.value_is_missing = quality_is_missing;
+
         const VCF_parsing_event pe = skip_to_state(parsing_quality);
         if (pe != VCF_parsing_event::ok) {
             return pe;
@@ -347,10 +351,13 @@ protected:
             std::string* ref;
             std::vector<std::string>* alts;
         } alleles;
+        struct {
+            std::string* value;
+            bool* value_is_missing;
+        } quality;
     } output;
     bool alleles_parsed;
     unsigned number_of_alts;
-    std::string quality;
     std::vector<std::string> filters;
     std::vector<std::string> info;
 
@@ -694,9 +701,11 @@ protected:
             return pe;
         }
         if (!tokenizer.token_is_dot()) {
-            quality = tokenizer.get_token();
+            *output.quality.value = tokenizer.get_token();
+            *output.quality.value_is_missing = false;
         } else {
-            quality.clear();
+            output.quality.value->clear();
+            *output.quality.value_is_missing = true;
         }
 
         return VCF_parsing_event::ok;
