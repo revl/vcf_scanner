@@ -166,8 +166,10 @@ protected:
         return continue_parsing_quality();
     }
 
-    VCF_parsing_event parse_filters_impl()
+    VCF_parsing_event parse_filters_impl(std::vector<std::string>* filters)
     {
+        output.filters = filters;
+
         next_list_index = 0;
 
         VCF_parsing_event pe = skip_to_state(parsing_filter);
@@ -355,10 +357,11 @@ protected:
             std::string* value;
             bool* value_is_missing;
         } quality;
+        std::vector<std::string>* filters;
     } output;
+
     bool alleles_parsed;
     unsigned number_of_alts;
-    std::vector<std::string> filters;
     std::vector<std::string> info;
 
     void reset_state_for_next_data_line()
@@ -713,7 +716,7 @@ protected:
 
     VCF_parsing_event continue_parsing_filters()
     {
-        return parse_string_list(parsing_info_field, filters,
+        return parse_string_list(parsing_info_field, *output.filters,
                 tokenizer.newline_or_tab_or_semicolon);
     }
 

@@ -323,6 +323,7 @@ void ineterpret_test_plan(const char* test_plan, Dump& dump,
     std::vector<std::string> alts;
     std::string quality_str;
     bool quality_is_missing;
+    std::vector<std::string> filters;
 
     for (;;) {
         switch (*test_plan) {
@@ -379,9 +380,9 @@ void ineterpret_test_plan(const char* test_plan, Dump& dump,
         case 'F':
             ++test_plan;
             if (dump_issues_and_clear_line(dump, vcf_scanner, test_reader,
-                        vcf_scanner.parse_filters())) {
+                        vcf_scanner.parse_filters(&filters))) {
                 dump << "F:";
-                dump_list(dump, vcf_scanner.get_filters());
+                dump_list(dump, filters);
                 dump << std::endl;
             }
             break;

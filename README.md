@@ -98,6 +98,7 @@ immedialtely after the respective `parse_...()` method returned `ok` or
         std::vector<std::string> alts;
         std::string quality_str;
         bool quality_is_missing;
+        std::vector<std::string> filters;
 
 2.  Repeat until there are no more data lines left to read.
 
@@ -126,9 +127,7 @@ immedialtely after the respective `parse_...()` method returned `ok` or
 
 7.  Parse the FILTER field.
 
-            parse_to_completion(vcf_scanner.parse_filters());
-
-            std::vector<std::string> filters = vcf_scanner.get_filters();
+            parse_to_completion(vcf_scanner.parse_filters(&filters));
 
 8.  Parse the INFO field.
 

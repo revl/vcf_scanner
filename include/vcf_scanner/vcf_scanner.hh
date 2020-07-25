@@ -197,7 +197,7 @@ public:
 
     // Parses the QUAL field and returns its original string representation as
     // it appears in the VCF file or an empty string if the value is missing.
-    // The 'std::stof()' function can be used to convert that value to a float.
+    // The 'std::stof()' function can be used to convert that value to 'float'.
     // The 'quality_is_missing' variable will be set to true if the field value
     // is MISSING ('.'). Otherwise, it will be set to false.
     VCF_parsing_event parse_quality(
@@ -206,18 +206,11 @@ public:
         return parse_quality_impl(quality_str, quality_is_missing);
     }
 
-    // Parses the FILTER field.
-    VCF_parsing_event parse_filters()
+    // Parses and returns the FILTER field. The word "PASS" is returned
+    // when the current record passed all filters.
+    VCF_parsing_event parse_filters(std::vector<std::string>* filters)
     {
-        return parse_filters_impl();
-    }
-
-    // Returns the FILTER field parsed by parse_filters().
-    // The word "PASS" is returned when the current record passed
-    // all filters.
-    const std::vector<std::string>& get_filters() const
-    {
-        return filters;
+        return parse_filters_impl(filters);
     }
 
     // Parses the INFO key-value pairs.
