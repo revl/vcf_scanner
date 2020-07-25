@@ -84,12 +84,10 @@ called at the end of each line regardless of whether any fields were skipped.
 The fields must be extracted in the exact order as defined by the VCF
 specification.
 
-The information returned by most of the `get_...()` methods is valid only
-immedialtely after the respective `parse_...()` method returned `ok` or
-`ok_with_warnings`.
-
-1.  Define the variables for the field values outside the data reading loop.
-    This will reduce unnecessary memory reallocation.
+1.  Define the variables for the field values outside the data reading loop to
+    reduce unnecessary memory reallocation. Every variable in this list is
+    valid only immedialtely after the respective `parse_...()` method returned
+    `ok` or `ok_with_warnings`.
 
         std::string chrom;
         unsigned pos;
