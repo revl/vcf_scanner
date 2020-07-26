@@ -16,6 +16,11 @@
 
 ## How to use
 
+This section is a step-by-step guide on how to use the library.  Additionally,
+the `examples` directory contains compilable code that illustrates key
+concepts, and the main header (`include/vcf_scanner/vcf_scanner.hh`) has plenty
+of comments that provide further details.
+
 ### Preparation and parsing the header
 
 1.  Allocate a generous amount of memory for the input buffer. The buffer must
