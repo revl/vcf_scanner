@@ -1,3 +1,6 @@
+// This example parses the specified VCF file and prints the extracted data
+// to the standard output stream.
+
 #include <vcf_scanner/vcf_scanner.hh>
 
 int main(int argc, const char* argv[])
@@ -13,12 +16,7 @@ int main(int argc, const char* argv[])
         return 1;
     }
 
-    static char buffer[1024 * 1024];
-    static size_t buffer_size;
-
-    auto read_buffer = [&] {
-        buffer_size = fread(buffer, 1, sizeof(buffer), input);
-    };
+    char buffer[1024 * 1024];
 
     VCF_scanner vcf_scanner;
 
@@ -26,9 +24,8 @@ int main(int argc, const char* argv[])
 
     // Read the header
     do {
-        read_buffer();
-    } while ((pe = vcf_scanner.feed(buffer, buffer_size)) ==
-            VCF_parsing_event::need_more_data);
+        pe = vcf_scanner.feed(buffer, fread(buffer, 1, sizeof(buffer), input));
+    } while (pe == VCF_parsing_event::need_more_data);
 
     if (pe != VCF_parsing_event::ok) {
         std::cerr << vcf_scanner.get_error() << std::endl;
@@ -60,8 +57,8 @@ int main(int argc, const char* argv[])
 
     auto parse_to_completion = [&](VCF_parsing_event pe) {
         while (pe == VCF_parsing_event::need_more_data) {
-            read_buffer();
-            pe = vcf_scanner.feed(buffer, buffer_size);
+            pe = vcf_scanner.feed(
+                    buffer, fread(buffer, 1, sizeof(buffer), input));
         }
 
         if (pe == VCF_parsing_event::error) {
@@ -169,7 +166,7 @@ int main(int argc, const char* argv[])
 
             if (!vcf_scanner.capture_gt()) {
                 std::cout << std::endl;
-                std::cout << "\tERR: no GT key" << std::endl;
+                std::cerr << "\tERR: no GT key" << std::endl;
                 return true;
             }
 
@@ -206,6 +203,4 @@ int main(int argc, const char* argv[])
 
         parse_to_completion(vcf_scanner.clear_line());
     }
-
-    return 0;
 }
