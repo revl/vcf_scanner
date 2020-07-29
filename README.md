@@ -100,7 +100,6 @@ specification.
         std::string ref;
         std::vector<std::string> alts;
         std::string quality_str;
-        bool quality_is_missing;
         std::vector<std::string> filters;
 
 2.  Repeat until there are no more data lines left to read.
@@ -121,10 +120,9 @@ specification.
 
 6.  Parse the QUAL field.
 
-            parse_to_completion(vcf_scanner.parse_quality(
-                &quality_str, &quality_is_missing));
+            parse_to_completion(vcf_scanner.parse_quality(&quality_str));
 
-            if (!quality_is_missing) {
+            if (!quality_str.empty()) {
                 float quality = std::stof(quality_str);
             }
 

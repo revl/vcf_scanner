@@ -81,7 +81,6 @@ int main(int argc, const char* argv[])
     std::string ref;
     std::vector<std::string> alts;
     std::string quality_str;
-    bool quality_is_missing;
     std::vector<std::string> filters;
 
     auto parse_data_line = [&] {
@@ -122,11 +121,10 @@ int main(int argc, const char* argv[])
             std::cout << "\t.\t";
         }
 
-        if (!parse_to_completion(vcf_scanner.parse_quality(
-                    &quality_str, &quality_is_missing))) {
+        if (!parse_to_completion(vcf_scanner.parse_quality(&quality_str))) {
             return false;
         }
-        if (!quality_is_missing) {
+        if (!quality_str.empty()) {
             std::cout << quality_str;
         } else {
             std::cout << ".";

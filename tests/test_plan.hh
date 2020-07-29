@@ -190,7 +190,6 @@ void ineterpret_test_plan(const std::vector<Test_check>& test_plan,
     std::string ref;
     std::vector<std::string> alts;
     std::string quality_str;
-    bool quality_is_missing;
     std::vector<std::string> filters;
 
     for (const auto& test_check : test_plan) {
@@ -235,8 +234,7 @@ void ineterpret_test_plan(const std::vector<Test_check>& test_plan,
             break;
         case 'Q':
             if (dump_issues_and_clear_line(dump, vcf_scanner, vcf_reader,
-                        vcf_scanner.parse_quality(
-                                &quality_str, &quality_is_missing))) {
+                        vcf_scanner.parse_quality(&quality_str))) {
                 dump << "Q:" << quality_str;
             }
             break;
