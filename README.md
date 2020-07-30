@@ -90,9 +90,11 @@ The fields must be extracted in the exact order as defined by the VCF
 specification.
 
 1.  Define the variables for the field values outside the data reading loop to
-    reduce unnecessary memory reallocation. Every variable in this list is
-    valid only immedialtely after the respective `parse_...()` method returned
-    `ok` or `ok_with_warnings`.
+    reduce unnecessary memory reallocation.  Every variable in this list will
+    contain a valid value only after the respective `parse_...()` call returns
+    `ok` (or `ok_with_warnings`).  If that call returns `need_more_data`, the
+    `feed()` method must be called until `ok` (or `ok_with_warnings`) is
+    returned. Only then the value can be read.
 
         std::string chrom;
         unsigned pos;
