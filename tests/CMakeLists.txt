@@ -2,7 +2,7 @@ add_library(catch2 catch_main.cc)
 
 set(UNIT_TESTS
 	tokenizer_test
-	newline_at_eof_test
+	eol_and_eof_test
 )
 
 foreach(TEST_NAME IN LISTS UNIT_TESTS)
