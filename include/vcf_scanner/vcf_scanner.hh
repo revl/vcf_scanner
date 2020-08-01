@@ -24,30 +24,30 @@
 #ifndef VCF_SCANNER__HH
 #define VCF_SCANNER__HH
 
-// These constants returned by most VCF_scanner methods to indicate the result
-// of a parsing operation.
+// These constants are returned by the 'parse_...()' methods of VCF_scanner to
+// indicate the result of the parsing operation.
 enum class VCF_parsing_event {
     need_more_data, // The parser needs a new input buffer to
-                    // continue parsing. See VCF_scanner::feed().
+                    // continue parsing. See 'VCF_scanner::feed()'.
 
     ok, // The current token (the VCF header or a data field) has
         // been successfully parsed. Header meta-information or
-        // the data field value is now available for retrieval.
+        // the data field value can now be used.
 
-    ok_with_warnings, // The token has been successfully parsed, but
-                      // parser encountered issues during parsing. Use
-                      // VCF_scanner::get_warnings() to retrieve the warning
-                      // messages.
+    ok_with_warnings, // The current token has been successfully parsed, but
+                      // the parser encountered issues during parsing.
+                      // Use 'VCF_scanner::get_warnings()' to retrieve the
+                      // warning messages.
 
-    error // A parsing error has occurred. Use VCF_scanner::get_error()
+    error // A parsing error has occurred. Use 'VCF_scanner::get_error()'
           // to get the error message.
           //
-          // If the error happened while parsing the VCF header,
-          // this parser instance can no longer be used.
+          // If the error happened while parsing the VCF header, parsing
+          // cannot continue and this parser instance can no longer be used.
           //
-          // If the error happened while parsing a data line, there
-          // is an option to ignore it and skip to the next line
-          // by calling VCF_scanner::clear_line().
+          // If the error happened while parsing a data line, there is an
+          // option to ignore it and skip to the next line by calling
+          // 'VCF_scanner::clear_line()'.
 };
 
 #include "impl/header.hh"
