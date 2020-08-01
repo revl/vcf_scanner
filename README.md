@@ -21,20 +21,23 @@ the `examples` directory contains compilable code that illustrates key
 concepts, and the main header (`include/vcf_scanner/vcf_scanner.hh`) has plenty
 of comments that provide further details.
 
-### Preparation and parsing the header
+### Preparation and parsing the VCF header
 
 1.  Allocate a generous amount of memory for the input buffer. The buffer must
     not be changed or deleted after it's been passed to the parser using the
     `feed()` method (see below).
 
-        char buffer[1024 * 1024];
+        std::array<char, 1024 * 1024> buffer;
 
-2.  Create an instance of the parser.
+2.  Create an instance of the header and the parser.
+
+        VCF_header vcf_header;
 
         VCF_scanner vcf_scanner;
 
-3.  Implement a function to read the input stream and feed the data into the
-    parser.
+3.  Implement a function to read the input stream and feed the VCF data into
+    the parser.  The `VCF_scanner::feed()` method continues parsing the field
+    that is currently being parsed.
 
         auto read_and_feed = [&]() -> VCF_parsing_event {
             size_t bytes_read;
@@ -46,12 +49,12 @@ of comments that provide further details.
                 // convention.
                 bytes_read = 0;
             else
-                bytes_read = vcf_stream->read(buffer, sizeof(buffer));
+                bytes_read = vcf_stream->read(buffer.data(), buffer.size());
 
             // Continue parsing the token whose parsing was suspended
             // because the previous buffer was depleted.
             // Return the result of parsing with additional data.
-            return vcf_scanner.feed(buffer, bytes_read);
+            return vcf_scanner.feed(buffer.data(), bytes_read);
         };
 
 4.  Implement a function to check the result of parsing a token and call the
@@ -69,13 +72,9 @@ of comments that provide further details.
                 show_warnings(vcf_scanner.get_warnings());
         };
 
-5.  Read the initial input buffer and use the completion function to parse the
-    header.
+5.  Use the completion function to parse the header.
 
-        parse_to_completion(read_and_feed());
-
-        // The header has been successfully parsed and and can be
-        // accessed using the get_header() method.
+        parse_to_completion(vcf_scanner.parse_header(&vcf_header));
 
 6.  Do not discard the current input buffer - it contains the beginning of the
     data lines.  Proceed to the data line parsing loop.
@@ -140,7 +139,7 @@ specification.
 
 9.  Parse genotype info.
 
-            if (vcf_scanner.get_header().has_genotype_info()) {
+            if (vcf_header.has_genotype_info()) {
                 parse_to_completion(vcf_scanner.parse_genotype_format());
 
                 if (vcf_scanner.capture_gt()) {

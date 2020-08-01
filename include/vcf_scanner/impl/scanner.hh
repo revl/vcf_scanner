@@ -22,6 +22,10 @@ protected:
 
         if (state <= parsing_pos) {
             if (state < parsing_chrom) {
+                if (state == not_parsing) {
+                    assert(false && "parse_header must be called first");
+                    return invalid_call_order_error();
+                }
                 return continue_parsing_header();
             }
             if (state == parsing_chrom) {
@@ -86,6 +90,16 @@ protected:
         }
 
         return VCF_parsing_event::error; // LCOV_EXCL_LINE
+    }
+
+    VCF_parsing_event parse_header_impl(VCF_header* vcf_header)
+    {
+        assert(state == not_parsing);
+
+        state = parsing_fileformat;
+        header = vcf_header;
+
+        return VCF_parsing_event::need_more_data;
     }
 
     VCF_parsing_event parse_loc_impl(std::string* chrom, unsigned* pos)
@@ -226,7 +240,7 @@ protected:
         }
         // LCOV_EXCL_STOP
 
-        if (current_genotype_field_index >= header.sample_ids.size()) {
+        if (current_genotype_field_index >= number_of_sample_ids) {
             return parsing_error(
                     "The number of genotype fields exceeds "
                     "the number of samples");
@@ -261,6 +275,7 @@ protected:
 
 protected:
     enum State {
+        not_parsing,
         parsing_fileformat,
         parsing_metainfo_key,
         parsing_metainfo_value,
@@ -280,7 +295,7 @@ protected:
         skipping_to_next_line,
         peeking_beyond_newline
     };
-    int state = parsing_fileformat;
+    int state = not_parsing;
 
     int fields_to_skip = 0;
 
@@ -335,10 +350,12 @@ protected:
 
     VCF_tokenizer tokenizer;
 
-    VCF_header header;
+    VCF_header* header;
 
-    size_t next_list_index;
+    unsigned number_of_sample_ids = 0;
+
     unsigned number_len;
+    size_t next_list_index;
 
     union {
         struct {
@@ -533,7 +550,7 @@ protected:
                             "VCF files must start with '##fileformat'");
                 }
 
-                header.file_format_version = value;
+                header->file_format_version = value;
             }
 
         parse_meta_info_key:
@@ -583,7 +600,7 @@ protected:
                         "Unexpected end of file while parsing VCF file header");
             }
 
-            header.add_meta_info(
+            header->add_meta_info(
                     std::move(current_meta_info_key), tokenizer.get_token());
 
             // Go back to parsing the next key.
@@ -614,7 +631,7 @@ protected:
                     if (header_line_column_ok > number_of_mandatory_columns) {
                         // The FORMAT field is present,
                         // but there are no samples.
-                        header.genotype_info_present = true;
+                        header->genotype_info_present = true;
                     }
                     goto end_of_header_line;
                 }
@@ -623,7 +640,7 @@ protected:
                 // Parse the next header line column.
             } while (header_line_column_ok <= number_of_mandatory_columns);
 
-            header.genotype_info_present = true;
+            header->genotype_info_present = true;
             state = parsing_sample_ids;
             /* FALL THROUGH */
 
@@ -634,7 +651,8 @@ protected:
                     return VCF_parsing_event::need_more_data;
                 }
 
-                header.sample_ids.push_back(tokenizer.get_token());
+                header->sample_ids.push_back(tokenizer.get_token());
+                ++number_of_sample_ids;
             } while (tokenizer.get_terminator() == '\t');
         }
 
@@ -744,7 +762,7 @@ protected:
             }
             if (tokenizer.at_eol()) {
                 state = end_of_data_line;
-                if (header.sample_ids.empty()) {
+                if (number_of_sample_ids == 0) {
                     return VCF_parsing_event::ok;
                 }
                 return parsing_error("No genotype information present");

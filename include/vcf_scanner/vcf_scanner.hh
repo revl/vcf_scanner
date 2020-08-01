@@ -154,11 +154,12 @@ public:
         return error_message;
     }
 
-    // Returns the VCF header, which becomes available once the last of the
-    // initial series of calls to Feed returns 'ok'.
-    const VCF_header& get_header() const
+    // Parse the VCF header.  The result is stored in the VCF_header object
+    // supplied by the client code. That object cannt be used until this call
+    // or a subsequent 'feed()' call returns 'ok' or 'ok_with_warnings'.
+    VCF_parsing_event parse_header(VCF_header* vcf_header)
     {
-        return header;
+        return parse_header_impl(vcf_header);
     }
 
     // Returns true if the entire input stream has been successfully parsed.

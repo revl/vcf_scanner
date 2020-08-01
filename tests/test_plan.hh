@@ -184,6 +184,8 @@ const char* dump_genotype(std::stringstream& dump, VCF_scanner& vcf_scanner,
 void ineterpret_test_plan(const std::vector<Test_check>& test_plan,
         VCF_scanner& vcf_scanner, VCF_reader& vcf_reader)
 {
+    VCF_header header;
+
     std::string chrom;
     unsigned pos;
     std::vector<std::string> ids;
@@ -198,7 +200,7 @@ void ineterpret_test_plan(const std::vector<Test_check>& test_plan,
         switch (*test_check.instructions) {
         case '^':
             update_dump(dump, vcf_scanner, vcf_reader,
-                    VCF_parsing_event::need_more_data);
+                    vcf_scanner.parse_header(&header));
             break;
         case '.':
             if (!vcf_scanner.at_eof()) {
@@ -209,8 +211,7 @@ void ineterpret_test_plan(const std::vector<Test_check>& test_plan,
             dump << '@' << vcf_scanner.get_line_number();
             break;
         case 'H':
-            dump_header(dump, vcf_scanner.get_header(),
-                    test_check.instructions + 1);
+            dump_header(dump, header, test_check.instructions + 1);
             break;
         case 'L':
             if (dump_issues_and_clear_line(dump, vcf_scanner, vcf_reader,

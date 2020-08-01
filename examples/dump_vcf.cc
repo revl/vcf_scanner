@@ -16,49 +16,14 @@ int main(int argc, const char* argv[])
         return 1;
     }
 
-    char buffer[1024 * 1024];
+    static std::array<char, 1024 * 1024> buffer;
 
     VCF_scanner vcf_scanner;
 
-    VCF_parsing_event pe;
-
-    // Read the header
-    do {
-        pe = vcf_scanner.feed(buffer, fread(buffer, 1, sizeof(buffer), input));
-    } while (pe == VCF_parsing_event::need_more_data);
-
-    if (pe != VCF_parsing_event::ok) {
-        std::cerr << vcf_scanner.get_error() << std::endl;
-        return 1;
-    }
-
-    if (pe == VCF_parsing_event::ok_with_warnings) {
-        for (const auto& warning : vcf_scanner.get_warnings()) {
-            std::cerr << "Warning: " << warning.warning_message << std::endl;
-        }
-        pe = VCF_parsing_event::ok;
-    }
-
-    std::cout << "##fileformat="
-              << vcf_scanner.get_header().get_file_format_version()
-              << std::endl;
-
-    for (const auto& kv : vcf_scanner.get_header().get_meta_info()) {
-        for (const auto& v : kv.second) {
-            std::cout << "##" << kv.first << '=' << v << std::endl;
-        }
-    }
-
-    std::cout << "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT";
-    for (const auto& v : vcf_scanner.get_header().get_sample_ids()) {
-        std::cout << '\t' << v;
-    }
-    std::cout << std::endl;
-
     auto parse_to_completion = [&](VCF_parsing_event pe) {
         while (pe == VCF_parsing_event::need_more_data) {
-            pe = vcf_scanner.feed(
-                    buffer, fread(buffer, 1, sizeof(buffer), input));
+            pe = vcf_scanner.feed(buffer.data(),
+                    fread(buffer.data(), 1, buffer.size(), input));
         }
 
         if (pe == VCF_parsing_event::error) {
@@ -74,6 +39,27 @@ int main(int argc, const char* argv[])
 
         return true;
     };
+
+    VCF_header header;
+
+    if (!parse_to_completion(vcf_scanner.parse_header(&header))) {
+        return 1;
+    }
+
+    std::cout << "##fileformat=" << header.get_file_format_version()
+              << std::endl;
+
+    for (const auto& kv : header.get_meta_info()) {
+        for (const auto& v : kv.second) {
+            std::cout << "##" << kv.first << '=' << v << std::endl;
+        }
+    }
+
+    std::cout << "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT";
+    for (const auto& v : header.get_sample_ids()) {
+        std::cout << '\t' << v;
+    }
+    std::cout << std::endl;
 
     std::string chrom;
     unsigned pos;
@@ -157,7 +143,7 @@ int main(int argc, const char* argv[])
             std::cout << "\t.\t";
         }
 
-        if (vcf_scanner.get_header().has_genotype_info()) {
+        if (header.has_genotype_info()) {
             if (!parse_to_completion(vcf_scanner.parse_genotype_format())) {
                 return false;
             }
