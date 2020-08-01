@@ -94,11 +94,11 @@ protected:
         if (state != parsing_chrom) {
             if (state < parsing_chrom) {
                 assert(false && "VCF header must be parsed first");
-                return VCF_parsing_event::error;
+                return invalid_call_order_error();
             }
 
             assert(false && "Must call clear_line() before parse_loc()");
-            return VCF_parsing_event::error;
+            return invalid_call_order_error();
         }
         // LCOV_EXCL_STOP
 
@@ -222,12 +222,12 @@ protected:
             assert(false &&
                     "parse_genotype_format must be called before "
                     "parse_genotype");
-            return VCF_parsing_event::error;
+            return invalid_call_order_error();
         }
         // LCOV_EXCL_STOP
 
         if (current_genotype_field_index >= header.sample_ids.size()) {
-            return data_line_error(
+            return parsing_error(
                     "The number of genotype fields exceeds "
                     "the number of samples");
         }
@@ -288,7 +288,7 @@ protected:
 
     unsigned header_line_column_ok;
 
-    VCF_parsing_event header_error(const char* err_msg)
+    VCF_parsing_event parsing_error(const std::string& err_msg)
     {
         error_message = err_msg;
         return VCF_parsing_event::error;
@@ -296,18 +296,17 @@ protected:
 
     VCF_parsing_event invalid_meta_info_line_error()
     {
-        return header_error("Malformed meta-information line");
+        return parsing_error("Malformed meta-information line");
     }
 
     VCF_parsing_event invalid_header_line_error()
     {
-        return header_error("Malformed VCF header line");
+        return parsing_error("Malformed VCF header line");
     }
 
-    VCF_parsing_event data_line_error(const std::string& err_msg)
+    VCF_parsing_event invalid_call_order_error()
     {
-        error_message = err_msg;
-        return VCF_parsing_event::error;
+        return parsing_error("Invalid method call order");
     }
 
     static constexpr unsigned number_of_mandatory_columns = 8;
@@ -328,7 +327,7 @@ protected:
         std::string err_msg = "Missing mandatory VCF field \"";
         err_msg += get_header_line_column(field_index);
         err_msg += '"';
-        return data_line_error(err_msg);
+        return parsing_error(err_msg);
     }
 
     std::vector<VCF_warning> warnings;
@@ -494,11 +493,11 @@ protected:
         // LCOV_EXCL_START
         if (state < parsing_chrom) {
             assert(false && "VCF header must be parsed first");
-            return VCF_parsing_event::error;
+            return invalid_call_order_error();
         }
         if (state > target_state) {
             assert(false && "clear_line() must call be called first");
-            return VCF_parsing_event::error;
+            return invalid_call_order_error();
         }
         // LCOV_EXCL_STOP
 
@@ -530,7 +529,7 @@ protected:
 
                 if (!tokenizer.get_key_value(&key, &value) ||
                         key != "##fileformat") {
-                    return header_error(
+                    return parsing_error(
                             "VCF files must start with '##fileformat'");
                 }
 
@@ -580,7 +579,7 @@ protected:
             }
 
             if (tokenizer.get_terminator() == EOF) {
-                return header_error(
+                return parsing_error(
                         "Unexpected end of file while parsing VCF file header");
             }
 
@@ -656,17 +655,17 @@ protected:
         case VCF_tokenizer::end_of_buffer:
             return VCF_parsing_event::need_more_data;
         case VCF_tokenizer::integer_overflow:
-            return data_line_error("Integer overflow in the POS column");
+            return parsing_error("Integer overflow in the POS column");
         default /* case VCF_tokenizer::end_of_number */:
             break;
         }
 
         if (number_len == 0) {
-            return data_line_error("Missing an integer in the POS column");
+            return parsing_error("Missing an integer in the POS column");
         }
 
         if (tokenizer.get_terminator() != '\t') {
-            return data_line_error("Invalid data line format");
+            return parsing_error("Invalid data line format");
         }
 
         state = parsing_id;
@@ -748,7 +747,7 @@ protected:
                 if (header.sample_ids.empty()) {
                     return VCF_parsing_event::ok;
                 }
-                return data_line_error("No genotype information present");
+                return parsing_error("No genotype information present");
             }
             std::string key = tokenizer.get_token();
             auto key_iter = format_keys.insert(key).first;
@@ -805,7 +804,7 @@ protected:
                     {
                         const char* err_msg = parse_gt();
                         if (err_msg != nullptr) {
-                            return data_line_error(err_msg);
+                            return parsing_error(err_msg);
                         }
                     }
                     break;
@@ -827,7 +826,7 @@ protected:
         } while (++current_genotype_value_index <
                 genotype_key_positions.number_of_positions);
 
-        return data_line_error("Too many genotype info fields");
+        return parsing_error("Too many genotype info fields");
     }
 
     const char* parse_gt()
