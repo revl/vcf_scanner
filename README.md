@@ -29,9 +29,7 @@ of comments that provide further details.
 
         std::array<char, 1024 * 1024> buffer;
 
-2.  Create an instance of the header and the parser.
-
-        VCF_header vcf_header;
+2.  Create an instance of the parser.
 
         VCF_scanner vcf_scanner;
 
@@ -73,6 +71,8 @@ of comments that provide further details.
         };
 
 5.  Use the completion function to parse the header.
+
+        VCF_header vcf_header;
 
         parse_to_completion(vcf_scanner.parse_header(&vcf_header));
 
