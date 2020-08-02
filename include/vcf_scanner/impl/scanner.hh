@@ -1,11 +1,7 @@
 // This header contains implementation details.
-// It is not meant to be included directly.
-
-#include <vector>
-#include <map>
-#include <set>
-#include <cassert>
-#include <stdio.h>
+#ifndef VCF_SCANNER__HH
+#    error this file is not meant to be included directly
+#endif
 
 #include "tokenizer.hh"
 
@@ -92,12 +88,13 @@ protected:
         return VCF_parsing_event::error; // LCOV_EXCL_LINE
     }
 
-    VCF_parsing_event parse_header_impl(VCF_header* vcf_header)
+    VCF_parsing_event parse_header_impl(VCF_header* header)
     {
         assert(state == not_parsing);
 
+        output.header = header;
+
         state = parsing_fileformat;
-        header = vcf_header;
 
         return VCF_parsing_event::need_more_data;
     }
@@ -350,14 +347,13 @@ protected:
 
     VCF_tokenizer tokenizer;
 
-    VCF_header* header;
-
     unsigned number_of_sample_ids = 0;
 
     unsigned number_len;
     size_t next_list_index;
 
     union {
+        VCF_header* header;
         struct {
             std::string* chrom;
             unsigned* pos;
@@ -550,7 +546,7 @@ protected:
                             "VCF files must start with '##fileformat'");
                 }
 
-                header->file_format_version = value;
+                output.header->file_format_version = value;
             }
 
         parse_meta_info_key:
@@ -595,12 +591,12 @@ protected:
                 return VCF_parsing_event::need_more_data;
             }
 
-            if (tokenizer.get_terminator() == EOF) {
+            if (tokenizer.get_terminator() == VCF_tokenizer::eof) {
                 return parsing_error(
                         "Unexpected end of file while parsing VCF file header");
             }
 
-            header->add_meta_info(
+            output.header->add_meta_info(
                     std::move(current_meta_info_key), tokenizer.get_token());
 
             // Go back to parsing the next key.
@@ -631,7 +627,7 @@ protected:
                     if (header_line_column_ok > number_of_mandatory_columns) {
                         // The FORMAT field is present,
                         // but there are no samples.
-                        header->genotype_info_present = true;
+                        output.header->genotype_info_present = true;
                     }
                     goto end_of_header_line;
                 }
@@ -640,7 +636,7 @@ protected:
                 // Parse the next header line column.
             } while (header_line_column_ok <= number_of_mandatory_columns);
 
-            header->genotype_info_present = true;
+            output.header->genotype_info_present = true;
             state = parsing_sample_ids;
             /* FALL THROUGH */
 
@@ -651,7 +647,7 @@ protected:
                     return VCF_parsing_event::need_more_data;
                 }
 
-                header->sample_ids.push_back(tokenizer.get_token());
+                output.header->sample_ids.push_back(tokenizer.get_token());
                 ++number_of_sample_ids;
             } while (tokenizer.get_terminator() == '\t');
         }

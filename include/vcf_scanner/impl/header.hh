@@ -1,9 +1,7 @@
 // This header contains implementation details.
-// It is not meant to be included directly.
-
-#include <string>
-#include <map>
-#include <vector>
+#ifndef VCF_SCANNER__HH
+#    error this file is not meant to be included directly
+#endif
 
 #include "string_view.hh"
 

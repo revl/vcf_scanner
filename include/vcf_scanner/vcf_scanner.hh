@@ -24,6 +24,15 @@
 #ifndef VCF_SCANNER__HH
 #define VCF_SCANNER__HH
 
+#include <string>
+#include <vector>
+#include <map>
+#include <set>
+#include <cassert>
+#include <climits>
+#include <cstring>
+#include <array>
+
 // These constants are returned by the 'parse_...()' methods of VCF_scanner to
 // indicate the result of the parsing operation.
 enum class VCF_parsing_event {
@@ -155,11 +164,11 @@ public:
     }
 
     // Parse the VCF header.  The result is stored in the VCF_header object
-    // supplied by the client code. That object cannt be used until this call
+    // supplied by the client code. That object cannot be used until this call
     // or a subsequent 'feed()' call returns 'ok' or 'ok_with_warnings'.
-    VCF_parsing_event parse_header(VCF_header* vcf_header)
+    VCF_parsing_event parse_header(VCF_header* header)
     {
-        return parse_header_impl(vcf_header);
+        return parse_header_impl(header);
     }
 
     // Returns true if the entire input stream has been successfully parsed.

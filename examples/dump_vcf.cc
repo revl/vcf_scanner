@@ -3,6 +3,8 @@
 
 #include <vcf_scanner/vcf_scanner.hh>
 
+#include <iostream>
+
 int main(int argc, const char* argv[])
 {
     if (argc != 2) {

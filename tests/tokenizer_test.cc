@@ -1,4 +1,4 @@
-#include <vcf_scanner/impl/tokenizer.hh>
+#include <vcf_scanner/vcf_scanner.hh>
 
 #include "catch.hh"
 
