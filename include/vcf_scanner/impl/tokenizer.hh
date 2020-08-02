@@ -114,7 +114,7 @@ public:
     {
         if (remaining_size == 0) {
             if (eof_reached) {
-                set_terminator(EOF);
+                set_terminator(eof);
                 return end_of_number;
             }
             return end_of_buffer;
@@ -162,7 +162,7 @@ public:
             // End of file has been reached. Return the accumulated
             // bytes as the last token.
 
-            set_terminator(EOF);
+            set_terminator(eof);
             if (!accumulating) {
                 token.clear();
             } else {
@@ -216,7 +216,7 @@ public:
             }
 
             // End of file has been reached.
-            set_terminator(EOF);
+            set_terminator(eof);
             return true;
         }
 
@@ -272,7 +272,7 @@ public:
 
     bool at_eol() const noexcept
     {
-        return terminator == '\n' || terminator == EOF;
+        return terminator == '\n' || terminator == eof;
     }
 
     bool get_key_value(VCF_string_view* key, VCF_string_view* value,
@@ -319,6 +319,8 @@ public:
     {
         return terminator;
     }
+
+    static constexpr int eof = -1;
 
 public:
     VCF_tokenizer() noexcept
