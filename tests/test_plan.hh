@@ -109,20 +109,19 @@ const char* dump_meta_info(std::stringstream& dump,
 }
 
 template <typename T>
-void dump_list(std::stringstream& dump, const T& l)
+void dump_list(std::stringstream& dump, const T& list)
 {
-    if (l.empty()) {
-        dump << ".";
-    } else if (l.size() == 1) {
-        dump << l.front();
-    } else {
-        auto iter = l.begin();
-        dump << '[' << *iter;
-        while (++iter != l.end()) {
+    dump << '[';
+
+    auto iter = list.begin();
+    if (iter != list.end()) {
+        dump << *iter;
+        while (++iter != list.end()) {
             dump << ',' << *iter;
         }
-        dump << ']';
     }
+
+    dump << ']';
 }
 
 void dump_header(std::stringstream& dump, const VCF_header& vcf_header,

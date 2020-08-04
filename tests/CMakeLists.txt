@@ -1,8 +1,9 @@
 add_library(catch2 catch_main.cc)
 
 set(UNIT_TESTS
-	tokenizer_test
 	eol_and_eof_test
+	list_field_test
+	tokenizer_test
 )
 
 foreach(TEST_NAME IN LISTS UNIT_TESTS)

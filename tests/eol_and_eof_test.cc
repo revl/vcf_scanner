@@ -69,7 +69,7 @@ TEST_CASE("File with no data lines")
 {
     run_test_cases_insensitive_to_newline_at_eof(R"(##fileformat=VCFv4.0
 #CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO)",
-            {{"^", ""}, {"HM*", ""}, {"HG", "no genotypes"}, {"HS*", "."},
+            {{"^", ""}, {"HM*", ""}, {"HG", "no genotypes"}, {"HS*", "[]"},
                     {".", ""}});
 }
 
@@ -77,7 +77,7 @@ TEST_CASE("FORMAT in the header line, but no samples")
 {
     run_test_cases_insensitive_to_newline_at_eof(R"(##fileformat=VCFv4.0
 #CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT)",
-            {{"^", ""}, {"HM*", ""}, {"HG", "with genotypes"}, {"HS*", "."},
+            {{"^", ""}, {"HM*", ""}, {"HG", "with genotypes"}, {"HS*", "[]"},
                     {".", ""}});
 }
 
@@ -114,7 +114,7 @@ TEST_CASE("Test many things at once")
                     {"@", "@4"},
                     {"L", "L:1@100000"},
                     {"#", "ID:[rs123,rs456]"},
-                    {"A", "R:C;A:G"},
+                    {"A", "R:C;A:[G]"},
                     {"Q", "Q:10"},
                     {"GF", "GF:OK"},
                     {"GC", "GT:OK"},
@@ -129,7 +129,7 @@ TEST_CASE("Test many things at once")
                     {"L", "L:2@200000"},
                     {"A", "R:C;A:[G,T]"},
                     {"Q", "Q:"},
-                    {"F", "F:PASS"},
+                    {"F", "F:[PASS]"},
                     {"I", "I:[NS=3,DP=14,AF=0.5,DB,H2]"},
                     {";", ";"},
                     {".", ""},
@@ -149,7 +149,7 @@ TEST_CASE("Missing a mandatory field")
                     {"@", "@3"},
                     {"A", "E:Missing mandatory VCF field \"ALT\""},
                     {"@", "@4"},
-                    {"F", "F:."},
+                    {"F", "F:[]"},
                     {";", ";"},
                     {"@", "@5"},
                     {"F", "E:Missing mandatory VCF field \"QUAL\""},
